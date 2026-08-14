@@ -1,0 +1,60 @@
+[package]
+name = "dynamic-config-node-remote"
+# Its own version, and it moves with the base package: `@dynamic-config/remote`
+# hands documents to `dynamic-config`, and a gap between them is a pair
+# nobody built.
+version = "0.0.1"
+edition.workspace = true
+rust-version = "1.88"
+license.workspace = true
+description = "The Rust remote stores for dynamic-config's Node bindings, as a second package"
+repository.workspace = true
+readme = "README.md"
+# Never on crates.io: a cdylib addon has no Rust consumers. It ships to npm
+# as `@dynamic-config/remote`.
+publish = false
+
+[package.metadata.release]
+release = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# The engine, for `Error`, `Fetched` and `Format`. This package never *loads*
+# a configuration: it hands a document to the base package, which does.
+dynamic-config = { workspace = true, features = ["async", "json", "toml", "yaml"] }
+# The shared redaction, so a store URL loses its password by the same rule
+# here as in the store crates rather than by a second copy of it.
+dynamic-config-store-core = { workspace = true }
+# The eight stores, pinned exactly for the reason every cross-crate
+# dependency here is: a wildcard cannot be resolved reproducibly, and these
+# crates move in lockstep with the engine linked beside them.
+#
+# `tls` on the two that keep their TLS stack behind a feature: an addon is
+# compiled weeks before anybody installs it, so there is no later moment at
+# which a user could turn one on.
+dynamic-config-consul = { version = "=0.6.1", path = "../dynamic-config-consul" }
+dynamic-config-etcd = { version = "=0.6.1", path = "../dynamic-config-etcd", features = ["tls"] }
+dynamic-config-firestore = { version = "=0.6.1", path = "../dynamic-config-firestore" }
+dynamic-config-git = { version = "=0.6.1", path = "../dynamic-config-git" }
+dynamic-config-nats = { version = "=0.6.1", path = "../dynamic-config-nats" }
+dynamic-config-redis = { version = "=0.6.1", path = "../dynamic-config-redis", features = ["tls"] }
+dynamic-config-s3 = { version = "=0.6.1", path = "../dynamic-config-s3" }
+dynamic-config-vault = { version = "=0.6.1", path = "../dynamic-config-vault" }
+# Floors that resolve, rather than a bare `"3"`: the minimal-versions
+# gate picks the *lowest* version of every direct dependency, and
+# `napi 3.0` wants a `napi-build` newer than `"2"` would pick.
+napi = { version = "3.3", default-features = false, features = ["napi6", "serde-json"] }
+napi-derive = "3.2"
+serde_json = "1.0.127"
+# etcd and NATS are async clients; a fetch from this package is a blocking
+# call on a worker thread, so it needs a runtime to drive them. The same
+# reason the Python remote wheel carries one.
+# `1.47`, the floor its siblings declare: a looser `"1"` here makes
+# `-Z direct-minimal-versions` pick 1.0 for this crate and conflict with
+# the store crates in the same lockfile.
+tokio = { version = "1.47", features = ["rt-multi-thread"] }
+
+[build-dependencies]
+napi-build = "2.2.3"

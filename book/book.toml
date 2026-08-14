@@ -1,0 +1,25 @@
+[book]
+title = "dynamic-config for Node.js"
+authors = ["Cevat Batuhan Tolon"]
+description = "Hot-reloadable configuration for Node.js: Rust resolves, your schema validates, JavaScript reads a cached object."
+language = "en"
+src = "src"
+
+# The third book, and the shape `book-python/` established: a reader
+# arriving from npm is not a Rust programmer who wants a shorter chapter.
+# One Pages deployment, three directories — `/dynamic-config/`,
+# `/dynamic-config/python/` and `/dynamic-config/node/`.
+[output.html]
+git-repository-url = "https://github.com/ctolon/dynamic-config"
+edit-url-template = "https://github.com/ctolon/dynamic-config/edit/dev/book-node/src/{path}"
+site-url = "/dynamic-config/node/"
+
+[output.html.fold]
+enable = true
+level = 1
+
+[output.html.search]
+limit-results = 20
+use-boolean-and = true
+boost-title = 2
+boost-hierarchy = 2

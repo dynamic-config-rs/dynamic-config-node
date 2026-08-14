@@ -1,0 +1,16 @@
+# The built addon: one per platform, produced by `napi build` and published
+# to npm as an optional dependency. Never committed — a binary in a git
+# history is a binary somebody has to trust.
+index.node
+node_modules/
+
+# A lockfile is not part of a library: nothing installing this package reads
+# it, and the one development dependency is a `^` range on purpose. CI
+# installs with `--no-save` for the same reason.
+package-lock.json
+
+# Written by `scripts/pack-platforms.mjs` at publish time: the per-platform
+# packages, and the artefacts CI downloads to build them. Both are outputs
+# of a release, not inputs to one.
+npm/
+artefacts/

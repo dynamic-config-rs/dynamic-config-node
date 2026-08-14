@@ -1,0 +1,47 @@
+[package]
+name = "dynamic-config-node"
+# Its own version, for the reason the Python binding's is its own: the
+# package embeds the engine rather than depending on a published version of
+# it, and its audience reads a different changelog. A Rust-only release has
+# nothing in it for a Node user.
+version = "0.0.1"
+edition.workspace = true
+# napi 3 needs more than the core's 1.71.
+rust-version = "1.85"
+license.workspace = true
+description = "Node.js bindings for dynamic-config: Rust resolves, your schema validates"
+repository.workspace = true
+readme = "README.md"
+# Never on crates.io: a `cdylib` addon has no Rust consumers. It ships to
+# npm as `dynamic-config`, built by @napi-rs/cli.
+publish = false
+
+# cargo-release owns the lockstep crates and leaves this one alone.
+[package.metadata.release]
+release = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+dynamic-config = { workspace = true, features = [
+    "json",
+    "toml",
+    "yaml",
+    "watch",
+    "async",
+    "dotenv",
+    "telemetry",
+] }
+# `serde-json` is what makes the boundary cheap: a resolved document is a
+# `serde_json::Value` on this side and a plain object on the other, and napi
+# converts between them without this crate writing a converter of its own.
+# Floors that resolve, rather than a bare `"3"`: the minimal-versions
+# gate picks the *lowest* version of every direct dependency, and
+# `napi 3.0` wants a `napi-build` newer than `"2"` would pick.
+napi = { version = "3.3", default-features = false, features = ["napi6", "serde-json"] }
+napi-derive = "3.2"
+serde_json = "1.0.127"
+
+[build-dependencies]
+napi-build = "2.2.3"

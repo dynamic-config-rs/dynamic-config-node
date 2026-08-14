@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "node16",
+    "moduleResolution": "node16",
+    "lib": ["ES2022", "DOM"],
+    "types": [],
+    "skipLibCheck": true,
+    "paths": {
+      // The examples import the package by name, the way a reader would
+      // copy them — and typecheck against the definitions in this
+      // repository rather than against a published version of them.
+      "dynamic-config-node": ["../js/index.d.ts"]
+    }
+  },
+  "include": ["10-nestjs/**/*.ts", "11-nextjs/**/*.ts"]
+}

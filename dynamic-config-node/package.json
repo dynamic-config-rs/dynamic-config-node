@@ -1,0 +1,54 @@
+{
+  "//": "`dynamic-config` on npm is an unrelated package by another author. This distribution takes the qualified name, exactly as `dynamic-config-py` does on PyPI, and the import is the package name.",
+  "name": "dynamic-config-node",
+  "version": "0.0.1",
+  "description": "Hot-reloadable configuration for Node.js: Rust resolves, your schema validates",
+  "keywords": [
+    "config",
+    "configuration",
+    "hot-reload",
+    "settings",
+    "watch",
+    "zod",
+    "napi-rs"
+  ],
+  "license": "MIT",
+  "author": "Cevat Batuhan Tolon <cevatbatuhan.tolon@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ctolon/dynamic-config.git",
+    "directory": "dynamic-config-node"
+  },
+  "homepage": "https://ctolon.github.io/dynamic-config/node/",
+  "bugs": {
+    "url": "https://github.com/ctolon/dynamic-config/issues"
+  },
+  "engines": {
+    "node": ">= 18"
+  },
+  "main": "js/index.js",
+  "types": "js/index.d.ts",
+  "files": [
+    "js/",
+    "README.md",
+    "LICENSE"
+  ],
+  "napi": {
+    "binaryName": "dynamic-config",
+    "targets": [
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-pc-windows-msvc"
+    ]
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "typecheck": "tsc -p tests/typing/tsconfig.json && tsc -p examples/tsconfig.json",
+    "build": "cargo build -p dynamic-config-node --release && node -e \"const {copyFileSync, existsSync} = require('fs'); const built = ['../target/release/libdynamic_config_node.so', '../target/release/libdynamic_config_node.dylib', '../target/release/dynamic_config_node.dll'].find(existsSync); copyFileSync(built, 'index.node')\""
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

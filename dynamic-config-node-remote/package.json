@@ -1,0 +1,45 @@
+{
+  "name": "dynamic-config-node-remote",
+  "version": "0.0.1",
+  "description": "The eight Rust remote stores for dynamic-config's Node bindings",
+  "keywords": [
+    "config",
+    "configuration",
+    "etcd",
+    "consul",
+    "vault",
+    "nats",
+    "redis",
+    "s3",
+    "firestore",
+    "git"
+  ],
+  "license": "MIT",
+  "author": "Cevat Batuhan Tolon <cevatbatuhan.tolon@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ctolon/dynamic-config.git",
+    "directory": "dynamic-config-node-remote"
+  },
+  "homepage": "https://ctolon.github.io/dynamic-config/node/remote-stores.html",
+  "bugs": {
+    "url": "https://github.com/ctolon/dynamic-config/issues"
+  },
+  "engines": {
+    "node": ">= 18"
+  },
+  "main": "js/index.js",
+  "types": "js/index.d.ts",
+  "files": [
+    "js/",
+    "README.md",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "dynamic-config-node": "^0.0.1"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "build": "cargo build -p dynamic-config-node-remote --release && node -e \"const {copyFileSync, existsSync} = require('fs'); const built = ['../target/release/libdynamic_config_node_remote.so', '../target/release/libdynamic_config_node_remote.dylib', '../target/release/dynamic_config_node_remote.dll'].find(existsSync); copyFileSync(built, 'index.node')\""
+  }
+}
