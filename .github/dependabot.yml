@@ -1,0 +1,38 @@
+version: 2
+
+updates:
+  # Cargo updates are grouped: what an addon links is reviewed as one tree.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      patch-and-minor:
+        update-types: [minor, patch]
+    ignore:
+      # napi majors change the addon's whole vocabulary.
+      - dependency-name: napi
+        update-types: [version-update:semver-major]
+      - dependency-name: napi-derive
+        update-types: [version-update:semver-major]
+  # npm: only the wrapper's devDependency (TypeScript) and nothing a user
+  # installs — the packages ship a binary and no JavaScript dependencies.
+  - package-ecosystem: npm
+    directory: /dynamic-config-node
+    schedule:
+      interval: monthly
+    groups:
+      dev:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    # One grouped bump instead of a queue: an action pin is reviewed the same
+    # way whether one moved or five did.
+    groups:
+      actions:
+        patterns: ["*"]
