@@ -5,6 +5,8 @@
   "keywords": [
     "config",
     "configuration",
+    "remote-config",
+    "hot-reload",
     "etcd",
     "consul",
     "vault",
@@ -12,7 +14,11 @@
     "redis",
     "s3",
     "firestore",
-    "git"
+    "git",
+    "service-discovery",
+    "secrets",
+    "kubernetes",
+    "napi-rs"
   ],
   "license": "MIT",
   "author": "Cevat Batuhan Tolon <cevatbatuhan.tolon@gmail.com>",
