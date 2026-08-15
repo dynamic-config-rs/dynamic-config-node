@@ -162,6 +162,9 @@ jobs:
             --exclude '^https://github\.com/dynamic-config-rs/'
             --exclude '^https://docs\.rs/dynamic-config'
             --exclude '^https://dynamic-config-rs\.github\.io'
+            # npmjs.com answers a bot with 403, package or no package —
+            # the link is right for a reader and uncheckable from CI.
+            --exclude '^https://www\.npmjs\.com/'
             README.md CONTRIBUTING.md SECURITY.md RELEASING.md
             AGENTS.md scripts/README.md
             dynamic-config*/README.md dynamic-config*/CHANGELOG.md
