@@ -1,7 +1,7 @@
 [package]
 name = "dynamic-config-node-remote"
-# Its own version, and it moves with the base package: `@dynamic-config/remote`
-# hands documents to `dynamic-config`, and a gap between them is a pair
+# Its own version, and it moves with the base package: this package hands
+# documents to `dynamic-config-node`, and a gap between them is a pair
 # nobody built.
 version = "0.0.1"
 edition.workspace = true
@@ -11,11 +11,9 @@ description = "The Rust remote stores for dynamic-config's Node bindings, as a s
 repository.workspace = true
 readme = "README.md"
 # Never on crates.io: a cdylib addon has no Rust consumers. It ships to npm
-# as `@dynamic-config/remote`.
+# as `dynamic-config-node-remote`.
 publish = false
 
-[package.metadata.release]
-release = false
 
 [lib]
 crate-type = ["cdylib"]
@@ -27,21 +25,18 @@ dynamic-config = { workspace = true, features = ["async", "json", "toml", "yaml"
 # The shared redaction, so a store URL loses its password by the same rule
 # here as in the store crates rather than by a second copy of it.
 dynamic-config-store-core = { workspace = true }
-# The eight stores, pinned exactly for the reason every cross-crate
-# dependency here is: a wildcard cannot be resolved reproducibly, and these
-# crates move in lockstep with the engine linked beside them.
-#
-# `tls` on the two that keep their TLS stack behind a feature: an addon is
+# The eight stores, from crates.io. The versions and the two `tls` features
+# are named once in the workspace manifest — `tls` because an addon is
 # compiled weeks before anybody installs it, so there is no later moment at
 # which a user could turn one on.
-dynamic-config-consul = { version = "=0.6.1", path = "../dynamic-config-consul" }
-dynamic-config-etcd = { version = "=0.6.1", path = "../dynamic-config-etcd", features = ["tls"] }
-dynamic-config-firestore = { version = "=0.6.1", path = "../dynamic-config-firestore" }
-dynamic-config-git = { version = "=0.6.1", path = "../dynamic-config-git" }
-dynamic-config-nats = { version = "=0.6.1", path = "../dynamic-config-nats" }
-dynamic-config-redis = { version = "=0.6.1", path = "../dynamic-config-redis", features = ["tls"] }
-dynamic-config-s3 = { version = "=0.6.1", path = "../dynamic-config-s3" }
-dynamic-config-vault = { version = "=0.6.1", path = "../dynamic-config-vault" }
+dynamic-config-consul = { workspace = true }
+dynamic-config-etcd = { workspace = true }
+dynamic-config-firestore = { workspace = true }
+dynamic-config-git = { workspace = true }
+dynamic-config-nats = { workspace = true }
+dynamic-config-redis = { workspace = true }
+dynamic-config-s3 = { workspace = true }
+dynamic-config-vault = { workspace = true }
 # Floors that resolve, rather than a bare `"3"`: the minimal-versions
 # gate picks the *lowest* version of every direct dependency, and
 # `napi 3.0` wants a `napi-build` newer than `"2"` would pick.

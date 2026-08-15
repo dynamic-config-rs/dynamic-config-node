@@ -41,7 +41,7 @@ the pattern is three lines and it is in the chapter.
 ## Encrypted files are not exposed
 
 Decryption needs a `Decryptor`, which is a Rust trait. Decrypt with the
-[CLI](https://ctolon.github.io/dynamic-config/cli.html) and point this at
+[CLI](https://dynamic-config-rs.github.io/cli.html) and point this at
 the result. The Python binding draws the same line for the same reason.
 
 ## `save` and JSON Schema export are not exposed

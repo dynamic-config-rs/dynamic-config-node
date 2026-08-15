@@ -1,9 +1,8 @@
 [package]
 name = "dynamic-config-node"
-# Its own version, for the reason the Python binding's is its own: the
-# package embeds the engine rather than depending on a published version of
-# it, and its audience reads a different changelog. A Rust-only release has
-# nothing in it for a Node user.
+# Its own version, for the reason the Python binding's is its own: its
+# audience reads a different changelog, and an engine release has nothing in
+# it for a Node user until this package picks it up.
 version = "0.0.1"
 edition.workspace = true
 # napi 3 needs more than the core's 1.71.
@@ -13,12 +12,9 @@ description = "Node.js bindings for dynamic-config: Rust resolves, your schema v
 repository.workspace = true
 readme = "README.md"
 # Never on crates.io: a `cdylib` addon has no Rust consumers. It ships to
-# npm as `dynamic-config`, built by @napi-rs/cli.
+# npm as `dynamic-config-node`.
 publish = false
 
-# cargo-release owns the lockstep crates and leaves this one alone.
-[package.metadata.release]
-release = false
 
 [lib]
 crate-type = ["cdylib"]

@@ -1,272 +1,102 @@
 # AGENTS.md
 
-Instructions for coding agents working in this repository. Humans want
-[CONTRIBUTING.md](CONTRIBUTING.md); this file is the same ground rules with the
-things an agent gets wrong made explicit.
+Two npm packages: `dynamic-config-node`, and `dynamic-config-node-remote`
+for the eight Rust stores. Both are Node-API addons around
+[the engine](https://github.com/dynamic-config-rs/dynamic-config), which is
+a crates.io dependency here, not a sibling.
 
 ## Orientation
 
-Every README's install snippet names the version being cut — the root's and
-the eleven companions' alike. The pre-release hook rewrites them all
-(`scripts/sync-readme-versions.sh`), and `doc_surface.rs`'s
-`the_readmes_agree_on_one_version` fails the gate if one is ever left
-behind anyway. The book never carries the number at all —
-its snippets say `<version>`.
-
-Eighteen crates in one workspace, one version, published together —
-fourteen to crates.io, two to PyPI, two to npm:
-
 ```text
-dynamic-config-macros      the proc macro; no stable API of its own
-dynamic-config             everything with behaviour — loading, layers, storage, watching
-dynamic-config-store-core  what the store crates share: the credential cache,
-                           URL redaction, the watch panic net. No stable API
-dynamic-config-etcd        \
-dynamic-config-consul       |
-dynamic-config-nats         |  one remote store each, behind a `RemoteSource`
-dynamic-config-redis        |  or `AsyncRemoteSource` implementation
-dynamic-config-vault        |
-dynamic-config-s3           |
-dynamic-config-firestore    |
-dynamic-config-git         /   (git: shallow single-ref fetch, any host)
-dynamic-config-embedded    a separate `no_std` crate, sharing no code
-dynamic-config-server      serves configuration over HTTP; a security boundary,
-                           so it starts from a threat model rather than a router
-dynamic-config-cli         the `explain`/`diff` binary
-dynamic-config-python      a PyO3 extension; ships to PyPI, never to crates.io
-                           (no dependencies — Pydantic is an extra)
-dynamic-config-python-remote  the stores for Python, a second wheel behind an
-                           extra: a wheel is built per platform, so seven
-                           clients cannot ride in the install that reads a file
+dynamic-config-node/
+  src/                the compiled surface: napi-rs, one module per concern
+  js/index.js         the facade — what a caller imports, and what throws
+  js/index.d.ts       hand-written, and it is the contract
+  tests/              node --test, no framework
+  examples/           twelve, runnable; CI runs the nine that need no framework
+  scripts/pack-platforms.mjs   writes the per-platform packages at publish time
+dynamic-config-node-remote/
+  src/lib.rs          the eight stores, wrapped
+  js/index.js         `useStore`, and the bridge to the base package
 ```
 
-`fuzz/` is its own workspace, so its lockfile and its nightly requirement
-touch none of the above.
-
-Read [README.md](README.md) before changing anything: it is the specification,
-not a summary. [Not planned](book/src/limitations.md#not-planned) lists what is deliberately
-*not* here and why; [ROADMAP.md](ROADMAP.md) lists what might still be. Check
-both before building something that was already decided.
+**Both packages version together**, and neither goes to crates.io: a
+`cdylib` addon has no Rust consumers. What ships is one prebuilt binary per
+platform, as optional dependencies of a wrapper.
 
 ## Commands
 
 ```sh
-just check        # fmt, clippy at both extremes, tests, docs, the no_std build
-just containers   # the seven remote stores, against real servers; needs Docker
-just embedded     # the no_std crate, on a host and for thumbv7em-none-eabihf
-just msrv         # every MSRV floor, against real toolchains
-just mocks        # the store crates' scripted-server tests; no Docker, seconds
-just hack         # every pairwise feature combination compiles
-just bless        # regenerate compile-fail expectations after an intended change
+just check        # fmt, clippy, both suites, the types, every example
+just node         # the base package: 39 tests, tsc, nine examples
+just node-remote  # the stores package: 15 tests, including the signature gate
+just book         # this repository's book
 ```
 
-There are skills in `.claude/skills/` for the tasks that recur:
-[adding a remote store](.claude/skills/add-remote-store/SKILL.md),
-[adding a Builder option](.claude/skills/add-macro-argument/SKILL.md),
-[adding a Cargo feature](.claude/skills/add-cargo-feature/SKILL.md),
-[changing the Python bindings](.claude/skills/change-python-bindings/SKILL.md),
-[triaging the security tab](.claude/skills/triage-security/SKILL.md), and
-[reviewing before a release](.claude/skills/review-for-release/SKILL.md). Read
-the relevant one before starting — each records decisions that are settled, so
-you do not spend the turn re-deriving them.
+Node 18+ and nothing else. TypeScript is optional: the type check says so
+and skips rather than failing, because `npm install -D typescript` is not a
+choice this gate should make for somebody fixing Rust.
 
-There is one subagent, in `.claude/agents/`:
-[`python-binding-reviewer`](.claude/agents/python-binding-reviewer.md), for
-reviewing a change against the binding's invariants — the ones whose failures
-are silent, like validation moving after the install or a read crossing back
-into Rust.
-
-`.claude/hooks/binding-drift.sh` runs after every edit and names the files a
-change has to travel to. It is advisory: two surfaces here mirror each other
-with nothing to enforce it, and a stale stub only fails under
-`mypy --strict` while a stale API reference fails nowhere at all.
-
-Never claim a change works without running `just check`. If Docker is
-unavailable, say so rather than skipping `just containers` silently.
+Skills in `.claude/skills/`: [triaging the security
+tab](.claude/skills/triage-security/SKILL.md), [reviewing before a
+release](.claude/skills/review-for-release/SKILL.md).
 
 ## Rules that are not negotiable
 
-**Reading configuration is lock-free and allocation-free.** `current()`
-acquires an `arc-swap` guard: **85 instructions** and zero allocations,
-measured by `benches/instructions.rs` and `benches/alloc_profile.rs` rather
-than asserted. Anything that puts a mutex, an allocation or a parse on that
-path is wrong regardless of how convenient it is — and "an atomic load" is
-the shape of the claim, not its cost.
+**Validation runs inside the load, on a worker thread, and reaches the
+event loop through a threadsafe function.** That is what keeps the property
+this design exists for: a document the schema refuses installs nothing and
+leaves the previous one serving — from the watcher exactly as from an
+explicit reload. It is also why there is no `initSync`: a synchronous load
+would be the loop waiting for itself.
 
-**Secrets are paths and types, never values.** Diffs, `check()` reports,
-unknown-key suggestions and *error messages* all report which key moved and what
-type was expected — never what was there. `dynamic-config/tests/security.rs`
-enforces this. A change that puts a value into a diagnostic is a security
-regression even if every test still passes.
+**Nothing throws across the boundary.** The native half answers
+`{ ok: true, value }` or `{ ok: false, error: { kind, path, originKind,
+origin, message } }`, and the facade in `js/index.js` is what turns a
+refusal into a `DynamicConfigError`. A `napi::Error` crossing back is a bug
+even when it looks like the same thing.
 
-**figment does not appear in a public signature** unless the `figment` feature
-is on. That feature exists precisely so the coupling is opt-in; do not widen it.
+**A validator returns plain data.** Its answer is serialised into the
+store, so a class instance comes back without its prototype and a `Date`
+comes back as `{}`. This is documented in `book/src/limitations.md` and
+asserted in the suite; do not promise otherwise in a doc comment.
 
-**`dynamic-config-embedded` shares no code with the rest**, and that is
-deliberate: figment is `std`, so there is nothing to share. Do not try to unify
-them. It keeps the *shape* — a snapshot in a `static`, a bad document leaving
-the previous one serving, `changes()` — and nothing else.
+**Secrets are paths and types, never values** — including a message the
+caller's own validator threw. The refused document's secret values are
+scrubbed out of it before it becomes a `DynamicConfigError`.
 
-**No mandatory dependency** beyond `figment`, `serde` and `arc-swap`. Everything
-else is a feature or a companion crate.
-
-**`#![forbid(unsafe_code)]`** in every crate, checked by CI.
-
-**Tests run on Linux, macOS and Windows, and a test may not assume which.**
-The 0.6 release lost five CI rounds to this, each a different shape of the
-same mistake, so the shapes are worth naming:
-
-- **Never assert on how a path is *spelled*.** `with_file_name` rebuilds a
-  path with the platform's separator, so `/etc/app/config.toml` becomes
-  `/etc/app\config..toml` on Windows. Compare `Path` components — parent,
-  extension, file name — not substrings or separator counts.
-- **Never embed a path in generated TOML or JSON.** A Windows path in a TOML
-  *basic* string makes `\a` an escape sequence and the file will not parse.
-  Write forward slashes, which cargo and this crate's loader both accept
-  everywhere.
-- **Never let a `#[cfg(unix)]` block strand something outside it.** A `let mut`
-  the block mutates, an import only it uses, a struct only its test builds —
-  each is an error on Windows under `-D warnings`, and none is visible from
-  the Unix branch. Prefer two whole functions over one with a block inside.
-- **Do not put a watched file in the system temporary directory.** On macOS
-  `/var` is a symlink to `/private/var`, so FSEvents reports a path the
-  watcher was never registered on; on Windows the runner's `TEMP` is an 8.3
-  short name and the events carry the long one. The engine's own watcher
-  tests use `tests/scratch/` under the crate, and that is why.
-
-`cargo check --tests --target x86_64-pc-windows-msvc` catches the
-compile-time half from a Linux machine — for `dynamic-config` at least; the
-crates that pull `ring` or `aws-lc-sys` need a Windows C toolchain and cannot
-be cross-checked. The runtime half only the CI matrix finds.
-
-**MSRV is measured, not declared.** The core floor is 1.71. A feature that
-raises it says so in the README table *and* gets a row in the CI matrix — `age`
-declares 1.74 and actually needs 1.85, which is the kind of thing only a real
-toolchain finds.
+**Store constructors are positional.** `#[napi(constructor)]` generates
+positional arguments, so the `(a, b, c?)` summary above `pub fn new` is a
+signature, not a sketch — `dynamic-config-node-remote/tests/signatures.test.js`
+compares the two and fails when they disagree. Three had drifted by 0.6.1.
 
 ## Mistakes this repository has actually seen
 
-These are not hypothetical. Each one shipped, got caught, and cost a debugging
-session:
+**A doc example for an API that never existed.** The crate page showed
+`new Etcd({ endpoints, key })` and `config.useStore(store)`; neither is
+real. The hook prints the files a change has to travel to, and the
+signature gate catches the constructors.
 
-**Tests that share state.** A config type's snapshot, layers, aliases and
-bindings live in `static`s keyed by the type. Two tests using the same config
-type, the same fixture path or the same environment variable will race — and
-pass alone, which is worse. **One type, one fixture, one variable per test.**
-Use a `macro_rules!` to declare them if that gets repetitive.
+**A test that read a hook's record too early.** The snapshot is swapped in
+before the hooks are dispatched, so seeing the new value does not mean the
+hook has run. Poll for what a hook recorded; do not read it once.
 
-**Silent string replacement.** When editing files programmatically, assert the
-anchor exists. A `replace` that matches nothing looks exactly like a successful
-edit until something further downstream fails for an unrelated-looking reason.
+**Watched fixtures in the system temporary directory.** macOS reports the
+resolved `/private/var` path and Windows the long form of an 8.3 name, so a
+watcher registered on one never matches events for the other. Tests write
+under `tests/scratch/`.
 
-**Believing a manifest.** `age` says 1.74 and needs 1.85. etcd's client claims
-to connect and connects lazily. Measure, then write the number down.
-
-**Cleanup that destroys the thing being protected.** `save_new` deleted the file
-it had just refused to overwrite. Before removing anything on an error path,
-ask whether this call is what created it.
-
-**Assuming an executor's ordering.** Two tasks spawned together are polled in
-whatever order the executor likes. Yield explicitly instead.
-
-**Turning default features off without reading what they were.** An SDK's
-defaults often include its HTTP client; removing them produces "no HTTP client
-was available" at runtime rather than a compile error.
-
-**Trusting a container registry.** A Docker Hub 429 looks exactly like a broken
-test. Pre-pull in CI, and prefer a registry without anonymous limits.
-
-**Deriving `Debug` over anything that can hold a credential or a fetched
-document.** A derive prints every field; three store crates shipped 0.0.1
-printing Vault/Consul/GCP tokens on `{:?}`. Hand-write `Debug` for any type
-whose fields can carry a secret (redact the secret, keep the fields a
-debugger needs), and add a planted-token test asserting `{:?}` excludes it.
-
-**Stacking `#[cfg]` attributes.** Two `#[cfg]`s on one item AND together:
-`#[cfg(unix)] #[cfg(not(unix))]` is unsatisfiable and compiles to *nothing*,
-silently. Three tests in `write.rs` never ran for months because of exactly
-that pair. One `cfg` per item; combine conditions with `all()`/`any()`.
-
-**Emitting `#[cfg(feature = ...)]` from the proc macro.** A `cfg` in generated
-code is evaluated against the *user's* crate features, where the feature does
-not exist — the gated method silently vanishes for every user. Route it
-through a `#[macro_export] #[doc(hidden)]` redirect macro defined in the
-facade crate, where the `cfg` means what it says (see
-`__clap_methods!` and `__async_methods!` in
-`dynamic-config/src/redirects.rs`, and the add-cargo-feature skill).
+**`npm publish <name>` is a package spec, not a directory.** It goes to the
+registry looking for a package by that name — a 404 on the one release
+where it cannot exist. `./` in front, always.
 
 ## What a change must carry
 
-- **A test that would fail without it** — not one that merely exercises the code.
-- **The reasoning, where it is not obvious.** Comments here explain *why*; the
-  code says what. If you chose between two reasonable designs, the rejected one
-  belongs in a comment or in the roadmap.
-- **Documentation** if a user would notice: a new `Builder` option goes in the
-  book's attribute reference (`book/src/attribute-reference.md`, the Builder
-  tables) and gets a section in the chapter it belongs to — the attribute
-  itself takes no arguments, so there is no argument table to extend; a new
-  feature goes in the feature tables (lib.rs front page and the book), and in
-  the MSRV table if it moves the floor. A new generated method that skips the
-  book fails `tests/doc_surface.rs`.
-- **A `CHANGELOG.md` entry** under `Unreleased` — the workspace one, and the
-  companion crate's own if that is what changed.
-
-### If the change touches Python
-
-`dynamic-config-python` is two halves that mirror each other, and neither the
-compiler nor `cargo test` notices when one moves alone. A change to the
-compiled surface has to reach the facade (with a docstring — the package is
-fully documented, `help()` is its manual, and ruff's `pydocstyle` fails the
-gate without one), `_core.pyi`, `book-python/src/reference.md` and the
-pytest suite. The facade is one concern per file — `_config`, `_schema`,
-`_settings`, `_lifetime`, `_diagnostics`, `_decorator`, `_errors`,
-`_executor` — with `__init__.py` as the public surface and nothing else.
-Its gate is `just python`, not `just check`: an extension module links no
-libpython, so `cargo test --workspace` excludes it deliberately.
-
-Its version moves on its own — it is excluded from `cargo release`, because
-the wheel embeds the engine rather than depending on a published version of
-it. Bump it when the Python package changes, not when the crates do.
-
-Two rules there have already cost something. The secret list is derived from
-the model under **every** name a file could use — the field name and each
-alias shape Pydantic accepts — because picking one per field leaked the value
-into `explain` and into the redacted cache on disk. And a
-`pydantic_settings.BaseSettings` class declares sources this engine does not
-run: `DynamicConfig` warns about them and `from_settings` translates them, so
-a new source option should ask whether pydantic-settings has a spelling for
-it.
-
-## Where things live
-
-| Looking for | Go to |
-|---|---|
-| what the crate does, and why each decision was made | `book/src/` — the book is the specification; `README.md` is the storefront |
-| the same, for the Python binding | `book-python/src/` — its own book since 0.6.1, published at `/dynamic-config/python/`. The Rust book keeps one stub page that links to it |
-| the same, for the Node binding | `book-node/src/`, published at `/dynamic-config/node/`; the crate is `dynamic-config-node`, the facade is `dynamic-config-node/js/`, and the npm package is `dynamic-config-node` |
-| what is deliberately absent, and what would reopen it | `book/src/limitations.md` |
-| what might still be built | `ROADMAP.md` |
-| how a contributor gets started, and what every module does | `docs/CONTRIBUTOR-ONBOARDING.md` |
-| the properties that must hold, and what enforces them | `SECURITY.md` |
-| loading, merging, precedence | `dynamic-config/src/loader/` |
-| what the attribute expands to | `dynamic-config-macros/src/expand/` |
-| storage and reload hooks | `dynamic-config/src/cell.rs` |
-| the Python bindings, inside | `book-python/src/internals.md`, then `dynamic-config-python/src/` |
-| the Node bindings, inside | `book-node/src/internals.md` — the thread rule is the whole design — then `dynamic-config-node/src/` |
-| what Python deliberately does not do | `book-python/src/limitations.md` |
-
-## Style
-
-`rustfmt` decides layout and `clippy -D warnings` decides the rest, at both
-feature extremes. Beyond that: name things after what they mean to a caller.
-Comments carry decisions, not mechanics — `// increments the counter` above
-`counter += 1` is noise; `// bumped before the wake, so a waiter that polls
-immediately sees the new generation` is not.
-
-Prose in documentation is for a reader who is deciding whether to trust the
-crate. State what it does *and* what it deliberately does not.
+The facade, the `.d.ts`, the chapter in `book/src/`, a test, and an entry
+under `## [Unreleased]` in the package's own `CHANGELOG.md`.
 
 ## Releasing
 
-Do not publish. `cargo release` prepares and CI publishes on the tag; see
-[RELEASING.md](RELEASING.md). Never run `cargo publish` directly.
+Do not publish. A version bump in `package.json` is the release; merging it
+into `main` is what publishes. See [RELEASING.md](RELEASING.md), and never
+run `npm publish` directly.

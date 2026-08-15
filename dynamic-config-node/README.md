@@ -141,18 +141,18 @@ against.
 
 ## The book
 
-[**dynamic-config for Node.js**](https://ctolon.github.io/dynamic-config/node/)
+[**dynamic-config for Node.js**](https://dynamic-config-rs.github.io/node/)
 — the API reference, schemas, watching, the frameworks, the remote stores,
 what crosses the boundary and what this binding will not do.
 
 The engine's own behaviour — precedence, profiles, discovery, the
 last-known-good cache, the document-shape rules — is the
-[Rust book](https://ctolon.github.io/dynamic-config/), because it is the
+[Rust book](https://dynamic-config-rs.github.io/), because it is the
 same engine.
 
 ## Examples
 
-Twelve, in [`examples/`](https://github.com/ctolon/dynamic-config/tree/main/dynamic-config-node/examples): a quick start, layering, watching,
+Twelve, in [`examples/`](https://github.com/dynamic-config-rs/dynamic-config-node/tree/main/dynamic-config-node/examples): a quick start, layering, watching,
 diagnostics, Express, Fastify, Zod/Ajv/no-schema side by side, a NestJS
 provider, Next.js server components, and the React one that draws the
 browser boundary rather than pretending there is none. The runnable ones
@@ -180,6 +180,6 @@ The matrix exists even though the ABI is stable, because that is a claim
 about the *addon*: the JavaScript half is ordinary code that a version can
 break. musl (Alpine) is not among the platforms — the addon links glibc.
 Raising the floor is treated as a breaking change. The full table is in
-[Stability & Production Use](https://ctolon.github.io/dynamic-config/node/stability.html).
+[Stability & Production Use](https://dynamic-config-rs.github.io/node/stability.html).
 
 [`dynamic-config`]: https://crates.io/crates/dynamic-config

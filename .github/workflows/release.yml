@@ -1,0 +1,376 @@
+name: Release
+
+# Releases are managed through the pull-request pipeline, not by hand-pushed
+# tags: merging a version-bump PR into `main` IS the release. Every push to
+# `main` lands here; the `decide` job checks whether the workspace version is
+# new, and everything downstream is skipped when it is not — so a docs merge
+# is a green no-op and a version bump is a release.
+#
+# The tag is an *output* of a successful publish, minted by CI at the merge
+# commit. Since `main` only accepts pull requests that passed the gates, a
+# release inherits the whole review pipeline by construction.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  decide:
+    name: is this a release?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      release: ${{ steps.check.outputs.release }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - id: check
+        run: |
+          # Both packages version together, and `pack-platforms.mjs`
+          # rewrites the wrapper's optional dependencies from it; this
+          # reads the base one.
+          version=$(node -p "require('./dynamic-config-node/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1; then
+            echo "v$version is already tagged — nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "v$version is new — this push is a release."
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  addons:
+    name: build the addons (${{ matrix.target }})
+    # After the crates are on crates.io, exactly like the wheel wave: an
+    # npm package published for a release whose crates never made it is a
+    # version pair that exists nowhere else, and npm versions are as
+    # permanent as PyPI's.
+    needs: [decide]
+    env:
+      # One protoc for every addon this job builds, pinned like the wheel
+      # wave's.
+      PROTOC_VERSION: "29.3"
+    # The wheel wave's condition, word for word: a `publish` that was
+    # skipped (a dispatch that only wants the addons) must not stop this,
+    # and one that failed must.
+    if: needs.decide.outputs.release == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+          - target: x86_64-apple-darwin
+            # The Intel runner. `macos-13` is retired and `macos-latest` is
+            # arm64, so an x86_64 addon needs this label by name.
+            runner: macos-15-intel
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v5
+        with:
+          node-version: "22"
+      # Native runners per architecture rather than cross-compilation: the
+      # addon links against the platform's own C runtime, and a cross build
+      # that "works" is one nobody has loaded on the machine it targets.
+      # The arm64 Linux runner is why this is five jobs and not three.
+      # etcd's client compiles its gRPC stubs at build time, so the stores
+      # addon needs `protoc` on every runner — and no runner image has it.
+      #
+      # From the project's own release, pinned, rather than from a package
+      # manager: the same decision the wheel wave made, after `choco
+      # install protoc` answered "the package was not found" and took a
+      # release down with it. It also means every platform's addon is built
+      # by the *same* compiler.
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "${RUNNER_TEMP}/protoc.zip" \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-osx-universal_binary.zip"
+          sudo unzip -o "${RUNNER_TEMP}/protoc.zip" 'bin/protoc' 'include/*' -d /usr/local
+          protoc --version
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = $env:PROTOC_VERSION
+          $url = "https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-win64.zip"
+          $zip = Join-Path $env:RUNNER_TEMP 'protoc.zip'
+          $dir = Join-Path $env:RUNNER_TEMP 'protoc'
+
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $dir -Force
+          Join-Path $dir 'bin' | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          & (Join-Path $dir 'bin\protoc.exe') --version
+      - run: cargo build -p dynamic-config-node --release --target ${{ matrix.target }}
+      - run: cargo build -p dynamic-config-node-remote --release --target ${{ matrix.target }}
+      - name: name them the way npm expects
+        shell: bash
+        run: |
+          mkdir -p artefacts/node artefacts/node-remote
+
+          case "${{ matrix.target }}" in
+            *windows*) prefix=""; suffix="dll" ;;
+            *apple*)   prefix="lib"; suffix="dylib" ;;
+            *)         prefix="lib"; suffix="so" ;;
+          esac
+
+          built="target/${{ matrix.target }}/release"
+          cp "$built/${prefix}dynamic_config_node.$suffix" "artefacts/node/${{ matrix.target }}.node"
+          cp "$built/${prefix}dynamic_config_node_remote.$suffix" \
+             "artefacts/node-remote/${{ matrix.target }}.node"
+      # Both suites, against the binaries that will ship — not against a
+      # debug build of the same source.
+      - name: the suites, against the artefacts
+        shell: bash
+        run: |
+          cp "artefacts/node/${{ matrix.target }}.node" dynamic-config-node/index.node
+          cp "artefacts/node-remote/${{ matrix.target }}.node" dynamic-config-node-remote/index.node
+          mkdir -p dynamic-config-node-remote/node_modules
+          ln -sfn ../../dynamic-config-node dynamic-config-node-remote/node_modules/dynamic-config-node
+
+          (cd dynamic-config-node && node --test tests/*.test.js)
+          (cd dynamic-config-node-remote && node --test tests/*.test.js)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: addon-${{ matrix.target }}
+          path: artefacts/**/*.node
+          if-no-files-found: error
+
+  publish-npm:
+    name: publish to npm
+    needs: [decide, addons]
+    if: >-
+      always()
+      && needs.addons.result == 'success'
+      && (needs.decide.outputs.release == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Provenance: npm records *which workflow, at which commit* built the
+      # package, and a consumer can verify it. It costs one permission and
+      # is the whole reason this job is not `npm publish` on a laptop.
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v5
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: addon-*
+          merge-multiple: true
+          path: artefacts
+      - name: sort the artefacts by package
+        run: |
+          mkdir -p dynamic-config-node/artefacts dynamic-config-node-remote/artefacts
+          cp artefacts/node/*.node dynamic-config-node/artefacts/
+          cp artefacts/node-remote/*.node dynamic-config-node-remote/artefacts/
+          ls -la dynamic-config-node/artefacts dynamic-config-node-remote/artefacts
+      # One package per platform, plus the wrapper that depends on them
+      # optionally — the shape npm has for native addons, and the reason an
+      # install downloads one binary rather than five.
+      - name: the per-platform packages
+        run: |
+          node dynamic-config-node/scripts/pack-platforms.mjs
+          node dynamic-config-node/scripts/pack-platforms.mjs dynamic-config-node-remote
+      # The Node packages version independently of the crates, so most
+      # workspace releases have nothing new for npm — and `npm publish`
+      # has no `--skip-existing`: publishing a version that is already
+      # there is an error, and it would take the tag job down with it.
+      # So the registry is asked first.
+      - name: is there anything to publish?
+        id: wanted
+        run: |
+          set -euo pipefail
+
+          publish=false
+
+          for package in dynamic-config-node dynamic-config-node-remote; do
+            version=$(node -p "require('./$package/package.json').version")
+            code=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              "https://registry.npmjs.org/${package}/${version}")
+
+            case "${code}" in
+              200)
+                echo "::notice::${package}@${version} is already on npm — nothing to publish"
+                ;;
+              404)
+                echo "::notice::${package}@${version} is new"
+                publish=true
+                ;;
+              *)
+                echo "::error::the registry answered ${code} for ${package}@${version}"
+                exit 1
+                ;;
+            esac
+          done
+
+          echo "publish=${publish}" >> "$GITHUB_OUTPUT"
+      - name: publish
+        if: steps.wanted.outputs.publish == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # The platform packages first: a wrapper on the registry whose
+          # optional dependencies are not there yet is an install that
+          # fails. `--provenance` records which workflow at which commit
+          # built each one.
+          #
+          # Each is skipped if it is already there, because a rerun after a
+          # partial failure is the only way forward — an npm version is as
+          # permanent as a PyPI one.
+          published() {
+            curl --silent --output /dev/null --write-out '%{http_code}' \
+              "https://registry.npmjs.org/$1/$2"
+          }
+
+          publish_if_new() {
+            local directory="$1"
+            local name version attempt
+
+            name=$(node -p "require('./${directory}/package.json').name")
+            version=$(node -p "require('./${directory}/package.json').version")
+
+            # Twelve packages in one job is a burst, and npm answers a burst
+            # with `429 rate limited exceeded` — a limit whose window it does
+            # not document. So each attempt asks the registry first: a PUT
+            # that actually landed before the client gave up is a 200 here,
+            # and retrying it would be the one thing that cannot be undone.
+            for attempt in 1 2 3 4; do
+              case "$(published "${name}" "${version}")" in
+                200)
+                  echo "── ${name}@${version} is already there"
+                  return 0
+                  ;;
+                404) ;;
+                *)
+                  echo "::error::the registry answered $(published "${name}" "${version}") for ${name}@${version}"
+                  exit 1
+                  ;;
+              esac
+
+              echo "── ${name}@${version} (attempt ${attempt})"
+
+              # `./` is not decoration: `npm publish dynamic-config-node` is a
+              # *package spec*, and npm goes to the registry looking for a
+              # package by that name — which on a first release is a 404 that
+              # reads as if the wrapper were missing rather than as a path it
+              # never treated as one. The platform packages published fine
+              # only because their argument has a slash in it.
+              if npm publish "./${directory}" --provenance --access public; then
+                return 0
+              fi
+
+              case "${attempt}" in
+                1) wait_for=60 ;;
+                2) wait_for=180 ;;
+                3) wait_for=300 ;;
+                *) wait_for=0 ;;
+              esac
+
+              if [ "${wait_for}" -gt 0 ]; then
+                echo "::warning::${name}@${version} did not publish; waiting ${wait_for}s"
+                sleep "${wait_for}"
+              fi
+            done
+
+            echo "::error::${name}@${version} did not publish after four attempts"
+            exit 1
+          }
+
+          for package in dynamic-config-node/npm/*/ dynamic-config-node-remote/npm/*/; do
+            publish_if_new "${package%/}"
+          done
+
+          publish_if_new dynamic-config-node
+          publish_if_new dynamic-config-node-remote
+
+  tag-and-release:
+    name: tag and GitHub release
+    needs: [decide, publish-npm]
+    if: needs.decide.outputs.release == 'true' && needs.publish-npm.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # The tag marks what was actually published: it is minted only after
+      # every crate is on the registry, at the merge commit that did it.
+      - name: tag the release
+        env:
+          VERSION: ${{ needs.decide.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "dynamic-config $VERSION" "$GITHUB_SHA"
+          git push origin "v$VERSION"
+
+      - name: notes from the changelog
+        env:
+          VERSION: ${{ needs.decide.outputs.version }}
+        run: |
+          # The section for this version, up to the next one.
+          awk -v v="$VERSION" '
+            $0 ~ "^## " v " " || $0 ~ "^## " v "$" { found = 1; next }
+            found && /^## /  { exit }
+            found            { print }
+          ' dynamic-config-node/CHANGELOG.md > release-notes.md
+
+          echo "--- notes ---"
+          cat release-notes.md
+
+      # An SBOM, attached to the release rather than gating it.
+      # A consumer asking "what is in this" had a Cargo lockfile, a
+      # `pyproject.toml` and no single answer; these are that answer, in the
+      # format the question is usually asked in.
+      #
+      # Deliberately *not* a gate: an SBOM that fails a build fails it for a
+      # fact about somebody else's published package, and the advisory gate
+      # in security.yml is where that belongs.
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6
+        with:
+          node-version: 22
+      - name: the bill of materials, per ecosystem
+        continue-on-error: true
+        run: |
+          mkdir -p sbom
+
+          # What an `npm install` of the wrapper actually pulls: the
+          # addon's own dependency tree is Rust, statically linked, and
+          # the platform packages carry nothing but a binary.
+          npx --yes @cyclonedx/cyclonedx-npm@1.19.3 \
+            --output-format JSON \
+            --output-file sbom/dynamic-config-node.cdx.json \
+            dynamic-config-node/package.json
+
+          ls -la sbom
+
+      - uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
+        with:
+          tag_name: v${{ needs.decide.outputs.version }}
+          name: v${{ needs.decide.outputs.version }}
+          body_path: release-notes.md
+          files: sbom/*.cdx.json

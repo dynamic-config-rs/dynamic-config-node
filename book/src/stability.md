@@ -23,7 +23,7 @@ because it is finished are both quiet. This is the second.
 ```
 
 A patch will not break you. Pre-1.0 a break bumps the minor, is called out
-in [the changelog](https://github.com/ctolon/dynamic-config/blob/main/dynamic-config-node/CHANGELOG.md),
+in [the changelog](https://github.com/dynamic-config-rs/dynamic-config-node/blob/main/dynamic-config-node/CHANGELOG.md),
 and comes with what to change on your side.
 
 **The two packages version together.** `dynamic-config-node-remote`

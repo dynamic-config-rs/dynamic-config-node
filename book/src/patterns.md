@@ -1,7 +1,7 @@
 # Patterns & Style
 
 What using this well looks like from Node, and the mistakes that read
-fine. The Rust book's [Patterns & Style](https://ctolon.github.io/dynamic-config/patterns.html)
+fine. The Rust book's [Patterns & Style](https://dynamic-config-rs.github.io/patterns.html)
 covers the ones about the engine; these are the ones about an event loop.
 
 ## Read `current()` where you use it — never at boot

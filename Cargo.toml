@@ -1,0 +1,49 @@
+# The Node bindings, as their own workspace.
+#
+# Two crates, neither of which goes to crates.io: a `cdylib` addon has no
+# Rust consumers. What they publish is npm packages — `dynamic-config-node`
+# and `dynamic-config-node-remote` — versioned on their own schedule, which
+# is why they left the engine's repository rather than being released in
+# lockstep with eighteen crates that a Node user never installs.
+#
+# The engine and the store crates come from crates.io, named with a caret:
+# a patch release of the engine is something this repository can pick up
+# without waiting for anybody, and a `=` here would have meant the opposite.
+[workspace]
+resolver = "2"
+members = ["dynamic-config-node", "dynamic-config-node-remote"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/dynamic-config-rs/dynamic-config-node"
+authors = ["Cevat Batuhan Tolon <cevatbatuhan.tolon@gmail.com>"]
+
+[workspace.dependencies]
+# The engine. `default-features = false` because each crate names what it
+# needs — the addon carries every feature a Node caller can reach, the
+# stores package carries only what a document needs to travel.
+dynamic-config = { version = "0.6", default-features = false }
+# The store crates' shared internals: the redaction that keeps a password
+# out of a store's description, by the same rule the store crates use
+# rather than by a second copy of it.
+dynamic-config-store-core = "0.6"
+# The eight stores. Caret, because an addon built today should be able to
+# pick up a store's patch release without this repository being re-cut.
+dynamic-config-consul = "0.6"
+dynamic-config-etcd = { version = "0.6", features = ["tls"] }
+dynamic-config-firestore = "0.6"
+dynamic-config-git = "0.6"
+dynamic-config-nats = "0.6"
+dynamic-config-redis = { version = "0.6", features = ["tls"] }
+dynamic-config-s3 = "0.6"
+dynamic-config-vault = "0.6"
+
+# The addon is what ships, and it ships prebuilt: one binary per platform,
+# downloaded rather than compiled by whoever runs `npm install`. So the
+# release profile is the one that matters, and it is tuned for size and
+# speed rather than for build time.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

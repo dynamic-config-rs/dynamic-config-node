@@ -18,12 +18,12 @@
   "author": "Cevat Batuhan Tolon <cevatbatuhan.tolon@gmail.com>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ctolon/dynamic-config.git",
+    "url": "git+https://github.com/dynamic-config-rs/dynamic-config-node.git",
     "directory": "dynamic-config-node-remote"
   },
-  "homepage": "https://ctolon.github.io/dynamic-config/node/remote-stores.html",
+  "homepage": "https://dynamic-config-rs.github.io/node/remote-stores.html",
   "bugs": {
-    "url": "https://github.com/ctolon/dynamic-config/issues"
+    "url": "https://github.com/dynamic-config-rs/dynamic-config-node/issues"
   },
   "engines": {
     "node": ">= 18"

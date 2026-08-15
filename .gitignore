@@ -1,87 +1,35 @@
-# Build output. The workspace shares one — and it is not the only one: a
-# doctest that writes a file writes it relative to *its* crate, under a
-# `target/` an anchored rule would not have covered. Unanchored, so every
-# one of them is ignored wherever it is.
+# Build output.
 target/
-
-# `cargo package` and `cargo publish` write here; the tarballs are artefacts of
-# a release, not part of one.
-**/*.crate
 
 # Backtraces and profiler output.
 *.profraw
 perf.data*
-flamegraph.svg
 
-# Editors and desktop environments. Kept short on purpose: a repository is not
-# the place to enumerate everybody's tools, and a global gitignore is.
+# Editors and desktop environments. Kept short on purpose: a repository is
+# not the place to enumerate everybody's tools, and a global gitignore is.
 .vscode/
 .idea/
 *.swp
 .DS_Store
 
-# `cargo release` writes this while it works and removes it afterwards; a
-# leftover means a run was interrupted.
-Cargo.toml.orig
+# The compiled addon, wherever a recipe drops it. Never committed — a
+# binary in a git history is a binary somebody has to trust.
+*.node
+node_modules/
 
-# Every file in here is written by the tests themselves at run time — the
-# suites create the directory and their own fixtures, so a checkout carries
-# none of it and `cargo test` never dirties the tree.
-/dynamic-config/tests/scratch/
+# A lockfile is not part of a library: nothing installing these packages
+# reads it, and the one development dependency is a `^` range on purpose.
+package-lock.json
 
-# Same, for the config server's watcher test: the system temporary directory
-# is a symlink on macOS and an 8.3 short name on Windows, and a file watcher
-# notices both — so that test writes under the crate instead.
-/dynamic-config-server/tests/scratch/
+# Written by `scripts/pack-platforms.mjs` at publish time: the per-platform
+# packages, and the artefacts CI downloads to build them. Both are outputs
+# of a release, not inputs to one.
+npm/
+artefacts/
 
-# And the Node suite, which watches files for the same reason and writes
-# its fixtures in the same place.
-/dynamic-config-node/tests/scratch/
+# The book's build output.
+book/book/
 
-/RELEASE-CHECKLIST.md
-
-# The Python extension's build and tool output. The wheel and the compiled
-# module are built by maturin (into `target/` and, for an editable install,
-# next to the package); the caches and environments belong to whoever ran
-# the tools, not to the repository.
-
-# Build artefacts
-dist/
-build/
-wheels/
-*.egg-info/
-*.egg
-# The compiled extension, wherever an editable install drops it.
-*.so
-*.pyd
-*.dylib
-*.py[cod]
-**/__pycache__/
-
-# Virtual environments. Named every way people name them, because a
-# checkout should not care which one you chose.
-.venv/
-venv/
-env/
-.env/
-ENV/
-
-# Tool caches and reports
-.mypy_cache/
-.pytest_cache/
-.ruff_cache/
-.tox/
-.nox/
-.hypothesis/
-.coverage
-.coverage.*
-coverage.xml
-htmlcov/
-.benchmarks/
-
-# Implementation notes for the next wave: working documents, written to be
-# read while building and thrown away after. Deliberately untracked — the
-# decisions that survive belong in ROADMAP.md, the book or a changelog,
-# and a design doc that outlives its implementation is a second source of
-# truth nobody updates.
-/docs/implementation/
+# Written by the suites at run time — the tests create the directory and
+# their own fixtures, so a checkout carries none of it.
+dynamic-config-node/tests/scratch/

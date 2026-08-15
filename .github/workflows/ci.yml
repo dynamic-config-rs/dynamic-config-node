@@ -1,0 +1,206 @@
+name: CI
+
+# No push trigger for `dev`: everything on dev travels through a pull
+# request anyway, and a push run would twin the PR run on the same commit —
+# under *required* checks, a deduplicating cancellation poisons the gate
+# (a cancelled twin's "CI is green" reads as failure and blocks the merge).
+# `main` keeps its push trigger because a rebase-merge mints a new SHA that
+# no PR run ever checked.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# One run cancels the previous on the same ref: a pull request pushed three
+# times in a minute should not occupy three runners proving the same thing
+# about two obsolete commits.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  # A failing build should say what failed, not where in a backtrace it gave up.
+  RUST_BACKTRACE: 1
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    # A hung job should fail, not sit on a runner for six hours.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    # A hung job should fail, not sit on a runner for six hours.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+          components: clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      # `etcd-client` compiles its gRPC stubs at build time and needs the
+      # `protoc` binary, which the runner image does not carry. The stores
+      # addon is the crate that pulls it in.
+      - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      # `--lib` on purpose: a cdylib that links no Node has no test target,
+      # so `--all-targets` over the workspace cannot reach either crate.
+      - run: cargo clippy -p dynamic-config-node --lib --all-features
+      - run: cargo clippy -p dynamic-config-node-remote --lib --all-features
+  node:
+    name: the Node bindings
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Every line the package claims. Node-API is ABI-stable across
+        # them, which is the whole reason this binding is napi-rs and not
+        # a per-version build — but "ABI-stable" is a claim about the
+        # addon, and the JavaScript half is ordinary code that a version
+        # can break.
+        node: ["18", "20", "22", "24"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v5
+        with:
+          node-version: ${{ matrix.node }}
+      - run: cargo build -p dynamic-config-node --release
+      - run: cp target/release/libdynamic_config_node.so dynamic-config-node/index.node
+      - run: node --test tests/*.test.js
+        working-directory: dynamic-config-node
+      # The examples are documentation people run, so they run here. Three
+      # of them want a framework; they say so and exit cleanly without one,
+      # which is why they are installed rather than skipped.
+      - run: npm install --no-save --no-fund --no-audit express fastify zod typescript
+        working-directory: dynamic-config-node
+      # The types a caller sees, checked the way their CI checks them: a
+      # regression here is invisible to a test suite, because
+      # `config.current().host` runs perfectly well while the checker calls
+      # it `unknown` and the editor offers no completion.
+      - name: the types, under strict
+        working-directory: dynamic-config-node
+        run: |
+          npx tsc -p tests/typing/tsconfig.json
+          npx tsc -p examples/tsconfig.json
+      - name: every example
+        working-directory: dynamic-config-node
+        run: |
+          for example in examples/*.mjs; do
+            echo "── $example"
+            node "$example" > /dev/null
+          done
+
+  node-remote:
+    name: the Node stores
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v5
+        with:
+          node-version: "22"
+      # etcd's client compiles its gRPC stubs at build time and needs
+      # `protoc`, which the runner image does not carry.
+      - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      # One version rather than the base package's matrix: this addon has no
+      # JavaScript half worth speaking of — eight constructors and a bridge —
+      # and it is the slowest thing in this workflow to build.
+      #
+      # The recipe's steps, written out: nothing else in this workflow
+      # installs `just`, and a job that needed a task runner to run three
+      # commands would be the first.
+      - run: cargo build -p dynamic-config-node-remote --release
+      - run: cp target/release/libdynamic_config_node_remote.so dynamic-config-node-remote/index.node
+      - name: the base package, linked the way npm would install it
+        run: |
+          mkdir -p dynamic-config-node-remote/node_modules
+          ln -sfn ../../dynamic-config-node dynamic-config-node-remote/node_modules/dynamic-config-node
+      # The base package needs its own binary too: the stores' suite imports
+      # `DynamicConfigError` from it.
+      - run: cargo build -p dynamic-config-node --release
+      - run: cp target/release/libdynamic_config_node.so dynamic-config-node/index.node
+      - run: node --test tests/*.test.js
+        working-directory: dynamic-config-node-remote
+
+  docs-links:
+    name: documentation links resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # A README is the first thing anyone reads and the last thing anyone
+      # tests. A dead anchor in it is a small bug that is very easy to ship.
+      - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2
+        with:
+          args: >-
+            --no-progress
+            --include-fragments
+            --max-retries 3
+            --retry-wait-time 5
+            --exclude '^https://github\.com/dynamic-config-rs/'
+            --exclude '^https://docs\.rs/dynamic-config'
+            --exclude '^https://dynamic-config-rs\.github\.io'
+            README.md CONTRIBUTING.md SECURITY.md RELEASING.md
+            AGENTS.md scripts/README.md
+            dynamic-config*/README.md dynamic-config*/CHANGELOG.md
+            book/src/*.md dynamic-config-node/examples/*/*.md
+            .claude/skills/*/SKILL.md
+          fail: true
+
+  actionlint:
+    name: workflows lint clean
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # The workflows are code that only runs in production. actionlint
+      # catches the typo'd `if:` expression and the misspelled input before a
+      # release does.
+      - uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2
+
+  # The one status branch protection requires. Requiring every job by name
+  # breaks the moment a matrix row is renamed; requiring this gate never
+  # does. `if: always()` because a gate that is skipped when a dependency
+  # fails would count as "not failed" and wave the merge through.
+  ci-ok:
+    name: CI is green
+    needs:
+      - fmt
+      - clippy
+      - node
+      - node-remote
+      - docs-links
+      - actionlint
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: every job this gate needs has succeeded
+        run: |
+          results='${{ toJSON(needs.*.result) }}'
+          echo "$results"
+          case "$results" in
+            *failure*|*cancelled*) exit 1 ;;
+          esac

@@ -46,7 +46,7 @@ Everything the Rust crate does with sources, unchanged: files merge in
 call order, the environment beats them, `.env` sits just below the real
 environment, a secrets directory beats a remote store, profiles select,
 discovery searches a path, and two runtime layers bracket the rest.
-[Sources & Precedence](https://ctolon.github.io/dynamic-config/sources-and-precedence.html)
+[Sources & Precedence](https://dynamic-config-rs.github.io/sources-and-precedence.html)
 is the chapter; the order is the same in all three languages.
 
 ```ts
@@ -97,5 +97,5 @@ first thing [Watching & Hooks](watching.md) demonstrates.
 
 The engine's own behaviour — precedence, profiles, discovery, the
 last-known-good cache, encryption, the document shape rules — is the
-[Rust book](https://ctolon.github.io/dynamic-config/), because it is the
+[Rust book](https://dynamic-config-rs.github.io/), because it is the
 same engine and describing it twice is how two descriptions drift.

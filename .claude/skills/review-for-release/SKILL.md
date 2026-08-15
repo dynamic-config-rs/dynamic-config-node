@@ -35,20 +35,20 @@ security regression that no test names.
 **Verify MSRV against real toolchains.** `age` declares 1.74 and needs 1.85.
 A manifest is a claim, not a measurement. `just msrv` runs every floor.
 
-**Check CI parity.** Any list that appears in more than one place drifts:
-the `--exclude` lists in ci.yml's parallel and serial test runs, the crate
-lists in the containers job, publish-dry-run, security.yml and the justfile,
-the MSRV matrix against the MSRV tables (the book's, and README's summary).
-Diff them, don't skim them.
+**Check CI parity.** The Node matrix in ci.yml, the five targets in
+`package.json`'s `napi.targets`, the five rows of release.yml's addon
+matrix and `scripts/pack-platforms.mjs`'s platform table all name the
+same set. A platform in one and not the others is a wrapper pointing at a
+package nobody built.
 
 **Audit the stacked `#[cfg]`s.** Two `#[cfg]` attributes on one item AND
 together — `#[cfg(unix)] #[cfg(not(unix))]` compiles to nothing, silently.
 Three tests here never ran for months because of one. Grep for consecutive
 cfg lines and read each pair.
 
-**Check the counts.** Twenty macro arguments, twelve crates, seventeen ci.yml jobs,
-twelve changelogs, twenty-six core examples. Every one of those numbers
-appears in documentation somewhere; recount whenever a list grows.
+**Check the counts.** Two packages, five platforms, seven ci.yml jobs,
+eleven examples, and the Node versions in three places: `package.json`'s
+`engines`, the CI matrix and the README's table.
 
 **`cargo clippy -- -W clippy::pedantic`** for the substantive lints only:
 `unnecessary_wraps`, `needless_pass_by_value` on public API, `redundant_clone`,
@@ -61,15 +61,17 @@ appears in documentation somewhere; recount whenever a list grows.
 - Counts anywhere in the documentation — tests, examples, features, crates —
   match reality. Run the suite and count rather than trusting the last number.
 - The book's example output matches what the examples print. Run them.
-- `cargo test -p dynamic-config --test doc_surface` — the generated-method
-  list in the book and on the lib.rs front page against the macro's source.
-- Each companion crate's README is *its own*, not the workspace one.
+- `node --test` in both packages — including
+  `dynamic-config-node-remote/tests/signatures.test.js`, which compares each
+  store's documented call to the constructor it actually takes.
+- `js/index.d.ts` and the facade agree with the compiled surface. Nothing
+  else checks that.
+- Each crate's README is *its own*, not the repository's.
 
 ## Release mechanics
 
-- The workspace version, the tag and the changelog agree.
-- Every crate's metadata is complete: `cargo metadata` and check for empty
-  fields rather than reading manifests by eye.
-- `cargo package --list` for each crate: README and LICENSE present, tests and
-  benches excluded.
-- Never run `cargo publish`. `cargo release` prepares; CI publishes on the tag.
+- Both `package.json` files carry the same version, and both changelogs
+  have a section for it.
+- `npm pack --dry-run` in each package: `js/`, README and LICENSE, and
+  nothing else — no `index.node`, no tests.
+- Never run `npm publish`. Merging into `main` publishes twelve packages.
