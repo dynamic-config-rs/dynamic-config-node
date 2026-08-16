@@ -1,6 +1,6 @@
 {
   "name": "dynamic-config-node-remote",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "The eight Rust remote stores for dynamic-config's Node bindings",
   "keywords": [
     "config",

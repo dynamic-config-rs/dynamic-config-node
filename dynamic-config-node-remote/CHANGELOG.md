@@ -8,6 +8,21 @@ base package, and a gap between them is a pair nobody built.
 
 ## [Unreleased]
 
+## 0.0.2 — 2026-08-16
+
+### Changed
+
+- **Moved with the base package** to
+  [dynamic-config-rs/dynamic-config-node](https://github.com/dynamic-config-rs/dynamic-config-node).
+  The two still version together, and `useStore` still bridges them.
+
+- **The README points somewhere.** It opened with a relative link to a
+  sibling directory, which on npm's own package page resolves to nothing;
+  it now names the base package's book and the remote-stores chapter.
+
+- **Keywords name the stores**, so a search for `etcd`, `vault` or
+  `consul` on npm finds this package.
+
 ## 0.0.1
 
 ### Added

@@ -12,6 +12,36 @@ release has nothing in it for a Node user.
 
 ## [Unreleased]
 
+## 0.0.2 — 2026-08-16
+
+### Changed
+
+- **The packages moved to their own repository**,
+  [dynamic-config-rs/dynamic-config-node](https://github.com/dynamic-config-rs/dynamic-config-node),
+  and release on their own schedule from there. The package names and the
+  API are unchanged; the book is now at
+  [dynamic-config-rs.github.io/node/](https://dynamic-config-rs.github.io/node/),
+  and `repository`, `homepage`, `bugs` and `author` in `package.json` name
+  the new home.
+
+- **More keywords**, because npm search reads them: the formats
+  (`toml`, `yaml`, `dotenv`), what this is for (`live-reload`,
+  `twelve-factor`, `file-watcher`), and what it is written in
+  (`typescript`, `napi-rs`, `rust`).
+
+### Fixed
+
+- **The stores package's own documentation showed a constructor that does
+  not exist.** `new Etcd({ endpoints, key })` was in the crate page and in
+  the `useStore` example, and every store's summary line read as an
+  options object — but `#[napi(constructor)]` generates *positional*
+  arguments, which is what the book, the README, the `.d.ts` and the tests
+  had all along. Three summaries were also missing arguments they take
+  (Vault's `format`, Redis's `tls`, Firestore's `accessTokenFn` and
+  `tls`), which on a positional call is the difference between a timeout
+  and a TLS object. A test now compares each summary to the constructor it
+  sits above.
+
 ## 0.0.1
 
 The first release: the engine, the schema door, the watcher and the whole
