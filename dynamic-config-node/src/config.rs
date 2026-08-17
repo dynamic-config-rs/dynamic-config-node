@@ -10,6 +10,7 @@
 //! thread can install a document with the loop asleep, and there is no
 //! handle for it to have taken.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock, Weak};
 
@@ -90,6 +91,12 @@ struct Inner {
     hooks: Mutex<Vec<(u64, Callable<Value, ()>)>>,
     next_hook: AtomicU64,
     layers: Layers,
+    /// Commits that `prepare` produced and `commit` has not run yet, by
+    /// token. A Rust `ReloadGroup` keeps these on its stack for the length
+    /// of one call; a JavaScript group holds a token across two `await`s,
+    /// so they live here until they are committed or discarded.
+    prepared: Mutex<HashMap<u64, dynamic_config::Commit>>,
+    next_prepared: AtomicU64,
     /// The JavaScript function a remote fetch calls, if one was installed.
     ///
     /// Held here rather than inside the shim the engine owns: that shim
@@ -332,6 +339,9 @@ enum What {
     /// Loads and validates, installing nothing — what a `--check` flag and
     /// a test both want.
     Candidate,
+    /// The first half of an all-or-nothing reload: everything that can
+    /// fail, with the install left for `commit`.
+    Prepare,
     Refresh,
 }
 
@@ -363,6 +373,24 @@ impl Task for Load {
                     Err(error) => Err(error),
                 }
             }
+            What::Prepare => match dynamic.builder().prepare() {
+                Ok(commit) => {
+                    let token = self.inner.next_prepared.fetch_add(1, Ordering::SeqCst) + 1;
+
+                    self.inner
+                        .prepared
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .insert(token, commit);
+
+                    // The token, as a number the facade hands back to
+                    // `commit`. A prepared commit that is never committed
+                    // is dropped, and dropping one is exactly what *not*
+                    // applying it means.
+                    Ok(Value::from(token))
+                }
+                Err(error) => Err(error),
+            },
             What::Refresh => self.inner.layers.remote.refresh().map(|()| Value::Null),
         };
 
@@ -465,6 +493,8 @@ impl Config {
             hooks: Mutex::new(Vec::new()),
             next_hook: AtomicU64::new(1),
             layers,
+            prepared: Mutex::new(HashMap::new()),
+            next_prepared: AtomicU64::new(0),
             source: Arc::new(JsSource::default()),
             watching: Mutex::new(None),
         });
@@ -706,6 +736,70 @@ impl Config {
             inner: Arc::clone(&self.inner),
             what: What::Candidate,
         })
+    }
+
+    /// The first half of an all-or-nothing reload: everything that can
+    /// fail, with the install left for `commit`.
+    ///
+    /// Answers a token. Every member of a group prepares before any of
+    /// them commits, so a member that refuses leaves every other member's
+    /// document exactly where it was — the property `reloadAtomic` is
+    /// named for.
+    #[napi(ts_return_type = "Promise<Outcome<number>>")]
+    pub fn prepare(&self) -> AsyncTask<Load> {
+        AsyncTask::new(Load {
+            inner: Arc::clone(&self.inner),
+            what: What::Prepare,
+        })
+    }
+
+    /// The second half: install what `prepare` validated.
+    ///
+    /// Synchronous, and that is the point — a commit is an `Arc` swap and
+    /// the hooks that follow it, with nothing fallible in between. An
+    /// unknown token is a caller error rather than a silent no-op.
+    #[napi]
+    pub fn commit(&self, token: u32) -> Value {
+        let taken = self
+            .inner
+            .prepared
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&u64::from(token));
+
+        let Some(commit) = taken else {
+            return outcome::refused(
+                "backend",
+                "no prepared commit for this token: it was already \
+                 committed, or it belongs to another configuration",
+            );
+        };
+
+        commit();
+
+        // The engine's own reload hook has already published this install;
+        // asking again is what makes the commit *this* one's rather than
+        // whichever validation ran last, and is a no-op when the hook won.
+        if let Some(installed) = Inner::dynamic(&self.inner).current() {
+            self.inner.commit(&installed);
+        }
+
+        outcome::ok(Value::Null)
+    }
+
+    /// Drops a prepared commit without installing it.
+    ///
+    /// What a group does to every member's commit when one member
+    /// refuses. An unknown token is ignored, because the caller's intent —
+    /// *this must not install* — is already true.
+    #[napi]
+    pub fn discard(&self, token: u32) {
+        let _ = self
+            .inner
+            .prepared
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&u64::from(token));
     }
 
     /// The published document, or `null` before the first install.

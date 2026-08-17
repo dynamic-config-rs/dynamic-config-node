@@ -128,3 +128,8 @@ try {
     console.log("\n  cache.reload() →", failure.kind, "—", failure.message.split("\n")[0]);
   }
 }
+
+// Kept apart on purpose, which is what this example is about. When three
+// configurations instead share a *lifetime* — one deployment moves them,
+// one shutdown stops them — `ConfigGroup` is that loop written once, and
+// `13-config-group.mjs` is it.

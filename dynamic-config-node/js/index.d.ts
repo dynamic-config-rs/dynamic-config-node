@@ -99,6 +99,70 @@ export interface Document {
   readonly format: "json" | "toml" | "yaml";
 }
 
+/** A document installed, as `events()` reports it. */
+export interface Reloaded {
+  readonly type: "reloaded";
+  /** A Unix timestamp, in milliseconds. */
+  readonly at: number;
+  readonly generation: number;
+  /** The dotted paths whose values moved. Empty on the first install. */
+  readonly changed: readonly string[];
+  /** `initial`, `file changed`, `remote changed`, `manual`, `recovered`. */
+  readonly reason: string;
+}
+
+/** A document refused, as `events()` reports it. */
+export interface ReloadFailed {
+  readonly type: "reloadFailed";
+  readonly at: number;
+  readonly generation: number;
+  readonly kind: ErrorKind;
+  /** The dotted key the failure is about, or `""` when it is the load's. */
+  readonly path: string;
+  /** How many refusals in a row: one is a typo, nine is an outage. */
+  readonly consecutive: number;
+}
+
+/**
+ * What `events()` yields. **No event carries a value** — paths, kinds,
+ * counts and timestamps only, the same rule every diagnostic here follows.
+ */
+export type ConfigEvent = Reloaded | ReloadFailed;
+
+/** What to do when installs outrun an async hook. */
+export type Backpressure = "latest" | "serial" | "every";
+
+/**
+ * The environment's `AbortSignal`, when the environment has one.
+ *
+ * This file declares no DOM and no `@types/node` dependency — a binding's
+ * types should compile under `"types": []`, and the gate checks that. So
+ * the signal resolves to the real global in a project that has one, and to
+ * the two members this library actually promises in a project that does
+ * not.
+ */
+export type ReloadSignal = typeof globalThis extends {
+  AbortSignal: new (...arguments_: never) => infer Signal;
+}
+  ? Signal
+  : { readonly aborted: boolean };
+
+export interface AsyncHookOptions {
+  /**
+   * `"latest"` (the default) keeps the newest install and drops what it
+   * overtook; `"serial"` runs every one in order; `"every"` starts each as
+   * it arrives.
+   */
+  backpressure?: Backpressure;
+  /** What to do with a rejection. `console.error` by default. */
+  onError?: (error: unknown) => void;
+}
+
+export interface RunningOptions extends WatchOptions {
+  /** Start a watcher for the length of the block. `true` by default. */
+  watch?: boolean;
+}
+
 export interface Options<T> {
   /** The section this configuration reads: `[db]` in a TOML file. */
   key: string;
@@ -212,11 +276,46 @@ export class DynamicConfig<T = unknown> {
    * loop wants, and the one where an `await` costs only the caller.
    */
   changes(): AsyncGenerator<T, void, void>;
+  /**
+   * Every install *and* every refusal, as typed events: the diagnostic
+   * stream a log line, a metric or an alert is built from.
+   *
+   * `failurePollMs` is what makes `reloadFailed` possible — an install
+   * wakes this stream and a refusal cannot, because a load that installed
+   * nothing bumps no generation. Omitted, the stream reports installs
+   * only and starts no timer.
+   */
+  events(options?: { failurePollMs?: number }): AsyncGenerator<ConfigEvent, void, void>;
+  /**
+   * Load, watch, run, stop — the whole lifetime of a service as one call.
+   *
+   * JavaScript has no `with`, so the block is a function; what it buys is
+   * the same thing, a watcher that cannot be left running by an exception
+   * on the way out.
+   */
+  running<R>(body: (document: T) => R | Promise<R>, options?: RunningOptions): Promise<R>;
 
   // Watching, and hooks.
   watch(options?: WatchOptions): this;
   stopWatching(): this;
   onReload(hook: (document: T) => void): number;
+  /**
+   * `onReload` for a hook that returns a promise, with a rule for what
+   * happens when installs outrun it.
+   *
+   * A hook already runs on the event loop here; what this adds is the
+   * part JavaScript does not do for you — an `async` hook handed to
+   * `onReload` returns a promise nobody awaits, so two installs run their
+   * bodies interleaved and a rejection becomes an unhandled one.
+   *
+   * The `signal` is aborted when a newer install supersedes this call
+   * under `"latest"`: nothing can cancel a promise, so what a hook doing
+   * I/O gets is the signal to stop on its own.
+   */
+  onReloadAsync(
+    hook: (document: T, context: { signal: ReloadSignal }) => Promise<void> | void,
+    options?: AsyncHookOptions,
+  ): number;
   onChange<V = unknown>(path: string, hook: (now: V, before: V) => void): number;
   removeHook(token: number): boolean;
 
@@ -229,6 +328,16 @@ export class DynamicConfig<T = unknown> {
    * and hands that over.
    */
   setRemote(fetch: () => Document, described?: string): this;
+  /**
+   * A store whose client is async — which, in JavaScript, is most of them.
+   *
+   * `refreshRemote()` awaits the fetch on the event loop and hands the
+   * engine the document it already has, so an `await fetch(...)` needs no
+   * variable kept up to date by a timer. The deadline is yours
+   * (`AbortSignal.timeout`), and a rejection reaches the caller as its own
+   * error rather than as a `remote` failure.
+   */
+  setRemoteAsync(fetch: () => Promise<Document>, described?: string): this;
   refreshRemote(): Promise<this>;
   clearRemote(): this;
   readonly remoteDescription: string | null;
@@ -245,6 +354,55 @@ export class DynamicConfig<T = unknown> {
   /** Pins values for the duration of `body`, and puts them back after. */
   overrides<R>(values: Record<string, unknown>, body: () => R | Promise<R>): Promise<R>;
 }
+
+/**
+ * Several configurations, one lifecycle: init, watch, report and stop them
+ * together, and reload them all-or-nothing.
+ *
+ * The group owns lifecycle, not storage — `database.current()` is still
+ * the read, and its type is still the member's own.
+ */
+export class ConfigGroup {
+  // `any` rather than `unknown`, and deliberately: a group is
+  // heterogeneous — a database configuration next to a cache one — and
+  // `DynamicConfig<T>` is invariant in `T`, so nothing narrower accepts
+  // both. It costs nothing, because the group is not the read path: the
+  // read is `database.current()`, on the member, which keeps its type.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  constructor(...configs: DynamicConfig<any>[]);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  readonly configs: DynamicConfig<any>[];
+  readonly size: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [Symbol.iterator](): Iterator<DynamicConfig<any>>;
+
+  /** Loads every member, concurrently. The first failure throws. */
+  init(): Promise<this>;
+  /**
+   * Reloads every member independently: one refusing leaves the others on
+   * their new documents, and the first failure is thrown at the end.
+   */
+  reload(): Promise<this>;
+  /** Every member validates, or no member installs. */
+  reloadAtomic(): Promise<this>;
+  watch(options?: WatchOptions): this;
+  stopWatching(): this;
+  /** init, then watch, then stop — the whole lifetime as one call. */
+  running<R>(body: (group: ConfigGroup) => R | Promise<R>, options?: RunningOptions): Promise<R>;
+  /** Every member's status, by key — one call for a health endpoint. */
+  status(): Record<string, Status>;
+  /** Every member's generation, by key. */
+  generations(): Record<string, number>;
+}
+
+/**
+ * Which dotted paths differ between two documents. **Paths, never values.**
+ *
+ * The audit half of a reload: what a log line may carry when the document
+ * itself may not.
+ */
+export function changedPaths(before: unknown, after: unknown): string[];
 
 /** Zod, in the four lines it takes. Zod is not a dependency of this package. */
 export function zodValidator<T>(schema: { parse: (document: unknown) => T }): (

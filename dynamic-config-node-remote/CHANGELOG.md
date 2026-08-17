@@ -8,6 +8,29 @@ base package, and a gap between them is a pair nobody built.
 
 ## [Unreleased]
 
+## 0.0.3 — 2026-08-18
+
+### Fixed
+
+- **The peer range names the version this addon ships with.** It had been
+  left at `^0.0.1` while both packages moved to 0.0.2, and npm's caret pins
+  the patch below 0.1.0 — `^0.0.1` matches 0.0.1 and nothing else — so
+  installing the matching pair failed to resolve. A test now compares the
+  two manifests, since the range has to move with every release and there
+  is no script here that would move it.
+
+### Changed
+
+- **Moved with the base package**, as it always does — the two are built
+  from one commit and version together. Nothing in this package changed;
+  the eight compiled stores are the same, with the same API.
+
+  What the base package added is theirs like any other store: an `Etcd`
+  or `Vault` source can be a member of a `ConfigGroup`, and `events()`
+  reports its installs and refusals. `setRemoteAsync` is for a store
+  written in JavaScript — these are compiled, and their fetch stays
+  synchronous, driven by the tokio runtime this package owns.
+
 ## 0.0.2 — 2026-08-16
 
 ### Changed

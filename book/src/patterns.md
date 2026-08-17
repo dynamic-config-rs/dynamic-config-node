@@ -46,7 +46,7 @@ async function main() {
 void main()
 ```
 
-Every load is asynchronous — [why](internals.md#the-thread-rule-and-why-every-load-is-async) —
+Every load is asynchronous — [why](internals.md#the-thread-rule-every-load-is-async) —
 so a module that wants configuration at import time wants top-level
 `await` (ESM) or a factory that returns a promise. A Nest `useFactory` and
 a Next.js server component are both already `async`, which is why those
@@ -66,6 +66,29 @@ A hook runs when the document installs, and anything slow in it holds the
 next reload. `changes()` yields on the loop *after* the install, so an
 `await` in the loop costs the caller and nobody else. Break out of the
 loop and the subscription is removed for you.
+
+`onReloadAsync` is the third shape, and the one to reach for when the work
+belongs next to the thing it rebuilds rather than in the service's own
+loop: it awaits the hook, keeps only the newest install by default, and
+reports a rejection instead of leaving it unhandled.
+
+## One lifecycle for the configurations that share one
+
+```ts
+const group = new ConfigGroup(db, cache, flags)
+
+await group.running(async () => {
+  await serve()
+})
+```
+
+Five configurations mean five `init()` calls, five watchers and five
+handles to stop in the right order — none of which is application logic.
+When a deployment moves them together, `group.reloadAtomic()` is the call
+that refuses to leave two of them new and one of them old.
+
+The group is lifecycle only: `db.current()` is still the read path,
+because nothing should sit between a program and its values.
 
 ## Validate with what the program already has
 

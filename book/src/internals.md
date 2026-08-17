@@ -1,10 +1,9 @@
 # Implementation Details
 
-What crosses the boundary, how often, and the three decisions that shaped
-it. None of this is needed to use the binding; it is here because the
-answers are unusual enough to be worth writing down.
+What crosses the boundary, how often, and the three constraints that
+shaped it. None of this is needed to use the binding.
 
-## The thread rule, and why every load is async
+## The thread rule: every load is async
 
 Node's rule is that only the event loop may touch a JavaScript value. The
 engine's rule is that validation happens *inside* the load, before

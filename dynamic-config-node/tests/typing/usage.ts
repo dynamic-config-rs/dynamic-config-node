@@ -12,12 +12,15 @@
  */
 
 import {
+  ConfigGroup,
   DynamicConfig,
   DynamicConfigError,
   ajvValidator,
+  changedPaths,
   engineVersion,
   packageVersion,
   zodValidator,
+  type ConfigEvent,
   type Document,
   type ErrorKind,
   type Report,
@@ -155,6 +158,99 @@ async function main(): Promise<void> {
 }
 
 void main;
+
+// ── The async surface keeps the caller's type ──────────────────────────
+
+async function asynchronous(): Promise<void> {
+  // Every document out of the stream is a `Database`, not `unknown`.
+  for await (const document of config.changes()) {
+    const host: string = document.host;
+
+    void host;
+    break;
+  }
+
+  for await (const event of config.events({ failurePollMs: 1000 })) {
+    // A discriminated union: the checker knows which fields each has.
+    if (event.type === "reloadFailed") {
+      const kind: ErrorKind = event.kind;
+      const consecutive: number = event.consecutive;
+
+      void kind;
+      void consecutive;
+    } else {
+      const changed: readonly string[] = event.changed;
+
+      void changed;
+    }
+
+    break;
+  }
+
+  const events: ConfigEvent[] = [];
+
+  void events;
+
+  config.onReloadAsync(async (document, { signal }) => {
+    const size: number = document.pool.maxSize;
+
+    void size;
+    void signal.aborted;
+  });
+
+  config.onReloadAsync(async () => {}, { backpressure: "serial" });
+
+  config.setRemoteAsync(async (): Promise<Document> => ({
+    text: "{}",
+    format: "json",
+  }));
+
+  // The block's own return type survives the lifetime helper.
+  const served: number = await config.running(
+    (document) => document.pool.maxSize,
+    { watch: false },
+  );
+
+  void served;
+}
+
+void asynchronous;
+
+// ── A group of configurations ──────────────────────────────────────────
+
+async function grouped(): Promise<void> {
+  const cache = new DynamicConfig<{ ttl: number }>({
+    key: "cache",
+    validate: (document): { ttl: number } => document as { ttl: number },
+  });
+
+  const group = new ConfigGroup(config, cache);
+
+  await group.init();
+  await group.reloadAtomic();
+
+  const statuses: Record<string, Status> = group.status();
+  const generations: Record<string, number> = group.generations();
+
+  void statuses;
+  void generations;
+  void group.size;
+
+  await group.running(async () => {
+    // The read path is the member, and it keeps its own type.
+    const host: string = config.current().host;
+    const ttl: number = cache.current().ttl;
+
+    void host;
+    void ttl;
+  });
+}
+
+void grouped;
+
+const moved: string[] = changedPaths({ a: 1 }, { a: 2 });
+
+void moved;
 
 // ── The schema adapters, against the shapes they promise ──────────────
 

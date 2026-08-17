@@ -94,6 +94,55 @@ function unwrap(outcome) {
   throw new DynamicConfigError(outcome.error);
 }
 
+/**
+ * The compiled half of each configuration, reachable inside this module.
+ *
+ * `#native` is private to `DynamicConfig`, and `ConfigGroup` needs the
+ * two-phase reload that lives on it. A `WeakMap` keyed by the facade is
+ * the door: nothing outside this file can reach it, and a configuration
+ * that goes away takes its entry with it.
+ */
+const compiled = new WeakMap();
+
+/**
+ * Which dotted paths differ between two documents. **Paths, never values.**
+ *
+ * The audit half of a reload, and the same rule every diagnostic in this
+ * library follows: a value in a log line is a secret in a log line. A
+ * table that appears or disappears is reported as the table's own path
+ * rather than as every leaf under it.
+ */
+function changedPaths(before, after) {
+  const moved = [];
+
+  const walk = (left, right, prefix) => {
+    const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
+    if (!object(left) || !object(right)) {
+      if (JSON.stringify(left) !== JSON.stringify(right)) {
+        moved.push(prefix);
+      }
+
+      return;
+    }
+
+    for (const key of new Set([...Object.keys(left), ...Object.keys(right)])) {
+      const path = prefix === "" ? key : `${prefix}.${key}`;
+
+      if (!(key in left) || !(key in right)) {
+        moved.push(path);
+        continue;
+      }
+
+      walk(left[key], right[key], path);
+    }
+  };
+
+  walk(before ?? {}, after ?? {}, "");
+
+  return moved.filter((path) => path !== "");
+}
+
 /** A `Values`-shaped read: `values.get("cache.ttl")`, one segment at a time. */
 function at(document, path) {
   let current = document;
@@ -132,6 +181,11 @@ class DynamicConfig {
    * The Python binding keeps the same mirror for the same reason.
    */
   #overrides = new Map();
+  /**
+   * The async store, when one is installed: the fetch, and the document
+   * `refreshRemote` has awaited for the engine to collect.
+   */
+  #awaited = null;
 
   /**
    * @param {object} options
@@ -162,6 +216,10 @@ class DynamicConfig {
       this.#cached = document;
       this.#generation = this.#native.generation();
     });
+
+    // For `ConfigGroup`, which drives the two-phase reload and is the only
+    // thing outside this class that has any business with it.
+    compiled.set(this, this.#native);
   }
 
   /** The section key this configuration reads. */
@@ -512,6 +570,140 @@ class DynamicConfig {
     }
   }
 
+  /**
+   * Every install *and* every refusal, as typed events.
+   *
+   * `changes()` is the document stream a service loop wants; this is the
+   * diagnostic one — what a log line, a metric or an alert is built from:
+   *
+   * ```js
+   * for await (const event of config.events({ failurePollMs: 1000 })) {
+   *   if (event.type === "reloadFailed" && event.consecutive > 3) {
+   *     alert(`configuration refused at ${event.path}: ${event.kind}`)
+   *   }
+   * }
+   * ```
+   *
+   * **No event carries a value.** Paths, kinds, counts and timestamps
+   * only — the same rule `explain()` and `check()` follow, and for the
+   * same reason.
+   *
+   * `failurePollMs` is what makes `reloadFailed` possible. An install
+   * wakes this stream; a refusal cannot, because a load that installed
+   * nothing bumps no generation and there is nothing to be notified of.
+   * So a stream that wants refusals asks for them and pays one `status()`
+   * read at the interval it names — nothing at all when it is omitted.
+   *
+   * @param {object} [options]
+   * @param {number} [options.failurePollMs] how often to look for a
+   *   refused reload. Omitted, the stream reports installs only.
+   */
+  async *events({ failurePollMs } = {}) {
+    let failures = this.status().consecutiveFailures;
+    let previous = this.tryCurrent();
+    let pending;
+    let wake;
+    let timer;
+
+    const token = this.onReload((document) => {
+      pending = document;
+      wake?.();
+    });
+
+    try {
+      for (;;) {
+        if (pending === undefined) {
+          await new Promise((resolve) => {
+            wake = resolve;
+
+            if (failurePollMs !== undefined) {
+              timer = setTimeout(resolve, failurePollMs);
+              // A stream must not be the reason a process stays up.
+              timer.unref?.();
+            }
+          });
+
+          clearTimeout(timer);
+          wake = undefined;
+        }
+
+        const document = pending;
+
+        pending = undefined;
+
+        const status = this.status();
+        const at = Date.now();
+
+        if (status.consecutiveFailures > failures) {
+          failures = status.consecutiveFailures;
+
+          yield {
+            type: "reloadFailed",
+            at,
+            generation: status.generation,
+            kind: status.lastFailure?.kind ?? "backend",
+            path: status.lastFailure?.path ?? "",
+            consecutive: status.consecutiveFailures,
+          };
+        } else {
+          failures = status.consecutiveFailures;
+        }
+
+        if (document !== undefined) {
+          const before = previous;
+
+          previous = document;
+
+          yield {
+            type: "reloaded",
+            at,
+            generation: this.generation,
+            changed: before === undefined ? [] : changedPaths(before, document),
+            reason: status.lastReason ?? "manual",
+          };
+        }
+      }
+    } finally {
+      this.removeHook(token);
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Load, watch, run, stop — the whole lifetime of a service, as one call.
+   *
+   * ```js
+   * await config.running(async (database) => {
+   *   await serve(database)
+   * })
+   * ```
+   *
+   * JavaScript has no `with`, so the block is a function. What it buys is
+   * the same thing: the watcher cannot be left running by an exception on
+   * the way out, and there is no handle to forget.
+   *
+   * @param {(document: unknown) => unknown} body what to run while it is loaded
+   * @param {object} [options]
+   * @param {boolean} [options.watch] start a watcher too. `true` by default.
+   * @param {number} [options.debounceMs]
+   * @param {number} [options.pollMs]
+   */
+  async running(body, { watch = true, debounceMs, pollMs } = {}) {
+    const document = await this.initAndCurrent();
+
+    if (!watch) {
+      return await body(document);
+    }
+
+    this.watch({ debounceMs, pollMs });
+
+    try {
+      return await body(document);
+    } finally {
+      this.stopWatching();
+    }
+  }
+
   /** How many documents have been installed. */
   get generation() {
     return this.#native.generation();
@@ -555,6 +747,95 @@ class DynamicConfig {
   }
 
   /**
+   * `onReload` for a hook that returns a promise, with a rule for what
+   * happens when installs outrun it.
+   *
+   * ```js
+   * config.onReloadAsync(async (document) => {
+   *   await pool.resize(document.pool.maxSize)
+   * })
+   * ```
+   *
+   * A hook already runs on the event loop here — there is no watcher
+   * thread to move it off, the way the Python binding has to. What this
+   * adds is the part JavaScript does not do for you: an `async` hook
+   * handed to `onReload` returns a promise nobody awaits, so two installs
+   * in quick succession run their bodies interleaved, and a rejection
+   * becomes an unhandled one.
+   *
+   * @param {(document: unknown, context: { signal: AbortSignal }) => Promise<void>} hook
+   * @param {object} [options]
+   * @param {"latest" | "serial" | "every"} [options.backpressure] what to
+   *   do when an install lands while the hook is still running.
+   *   `"latest"` — the default — keeps the newest and drops what it
+   *   overtook, which is what configuration usually means: resizing a
+   *   pool to a size nobody is asking for any more is work done for
+   *   nothing. `"serial"` runs every one in order, for a hook that is an
+   *   audit trail rather than a reconciliation. `"every"` starts each as
+   *   it arrives, which is `onReload` with the promise still unawaited.
+   * @param {(error: unknown) => void} [options.onError] what to do with a
+   *   rejection. Reported to `console.error` by default, because a
+   *   configuration hook is not the place to end a process.
+   * @returns the token that removes it again
+   */
+  onReloadAsync(hook, { backpressure = "latest", onError } = {}) {
+    if (!["latest", "serial", "every"].includes(backpressure)) {
+      throw new TypeError(
+        `\`${backpressure}\` is not a backpressure policy: use "latest", ` +
+          '"serial" or "every"',
+      );
+    }
+
+    const report =
+      onError ??
+      ((error) => {
+        console.error("a dynamic-config reload hook rejected:", error);
+      });
+
+    let running = false;
+    let queued = [];
+    let controller;
+
+    const start = async (document) => {
+      running = true;
+      controller = new AbortController();
+
+      try {
+        await hook(document, { signal: controller.signal });
+      } catch (failure) {
+        report(failure);
+      }
+
+      const next = queued.shift();
+
+      running = false;
+
+      if (next !== undefined) {
+        void start(next);
+      }
+    };
+
+    return this.onReload((document) => {
+      if (backpressure === "every" || !running) {
+        void start(document);
+
+        return;
+      }
+
+      // One slot for `latest`, a queue for `serial`: the difference
+      // between "what is true now" and "everything that was true".
+      queued = backpressure === "latest" ? [document] : [...queued, document];
+
+      if (backpressure === "latest") {
+        // The call still running is about to be superseded. Nothing can
+        // cancel a promise, so what it gets is the signal to stop on its
+        // own — which a hook doing I/O can pass to `fetch` or to a query.
+        controller?.abort();
+      }
+    });
+  }
+
+  /**
    * Called when the value at `path` changes, and not otherwise.
    *
    * Paths, not values, is what the engine reports elsewhere; here the
@@ -591,7 +872,59 @@ class DynamicConfig {
    * ```
    */
   setRemote(fetch, described = "a remote source written in JavaScript") {
+    this.#awaited = null;
     unwrap(this.#native.setRemote(fetch, described));
+
+    return this;
+  }
+
+  /**
+   * A store whose client is async — which, in JavaScript, is most of them.
+   *
+   * ```js
+   * config.setRemoteAsync(async () => {
+   *   const response = await fetch(URL, { signal: AbortSignal.timeout(5000) })
+   *
+   *   return { text: await response.text(), format: "json" }
+   * }, "our control plane")
+   *
+   * await config.refreshRemote()
+   * ```
+   *
+   * The engine calls a store from a worker thread, where a promise cannot
+   * be awaited — which is why `setRemote` needs a synchronous function and
+   * why the advice used to be *keep the last answer in a variable and hand
+   * that over*. This awaits the fetch on the event loop first, inside
+   * `refreshRemote()`, and hands the engine the document it already has.
+   *
+   * Two things follow from that ordering: the deadline is yours, as it
+   * always was — `AbortSignal.timeout` rather than a 30-second wall — and
+   * a rejection reaches the caller as its own error rather than as a
+   * `remote` failure, because nothing has entered the engine yet.
+   */
+  setRemoteAsync(fetch, described = "an async remote source written in JavaScript") {
+    this.#awaited = { fetch, handed: undefined };
+
+    // The courier. The engine calls this on the loop through a
+    // threadsafe function; by then `refreshRemote` has already awaited
+    // the real one and left the answer here.
+    unwrap(
+      this.#native.setRemote(() => {
+        const handed = this.#awaited?.handed;
+
+        if (this.#awaited === null || handed === undefined) {
+          throw new Error(
+            "this store is asynchronous: its document is awaited by " +
+              "refreshRemote() before the engine is called, and there is " +
+              "none waiting here",
+          );
+        }
+
+        this.#awaited.handed = undefined;
+
+        return handed;
+      }, described),
+    );
 
     return this;
   }
@@ -604,12 +937,20 @@ class DynamicConfig {
    * Rust and Python bindings make explicit.
    */
   async refreshRemote() {
+    if (this.#awaited !== null) {
+      // Awaited here, on the loop, and before anything enters the engine:
+      // a rejection is the caller's own error, and an `AbortSignal` the
+      // fetch is given still means what it means.
+      this.#awaited.handed = await this.#awaited.fetch();
+    }
+
     unwrap(await this.#native.refreshRemote());
 
     return this;
   }
 
   clearRemote() {
+    this.#awaited = null;
     this.#native.clearRemote();
 
     return this;
@@ -696,6 +1037,218 @@ class DynamicConfig {
   }
 }
 
+
+/**
+ * Several configurations, one lifecycle.
+ *
+ * A service with five configurations writes the orchestration itself:
+ * init each, watch each, remember every handle, stop them in the right
+ * order on the way out. None of that is application logic, and all of it
+ * is the same in every service.
+ *
+ * ```js
+ * const group = new ConfigGroup(database, cache, queue)
+ *
+ * await group.running(async () => {
+ *   await serve()
+ * })
+ * ```
+ *
+ * The group owns *lifecycle*, not storage: `database.current()` is still
+ * the read, and nothing here sits between a program and its values.
+ */
+class ConfigGroup {
+  #configs;
+
+  /** @param {...DynamicConfig} configs the members, in start order */
+  constructor(...configs) {
+    if (configs.length === 0) {
+      throw new TypeError("a group of no configurations has nothing to do");
+    }
+
+    const keys = configs.map((config) => config.key);
+    const duplicates = keys.filter((key, index) => keys.indexOf(key) !== index);
+
+    if (duplicates.length > 0) {
+      throw new TypeError(
+        "two configurations in one group share a key, and a group reports " +
+          `per key: ${[...new Set(duplicates)].join(", ")}`,
+      );
+    }
+
+    this.#configs = configs;
+  }
+
+  /** The members, in the order they were given. */
+  get configs() {
+    return [...this.#configs];
+  }
+
+  get size() {
+    return this.#configs.length;
+  }
+
+  [Symbol.iterator]() {
+    return this.#configs[Symbol.iterator]();
+  }
+
+  /**
+   * Loads every member, concurrently.
+   *
+   * `Promise.all` rather than a loop: three files are three loads on
+   * libuv's pool, and queueing them behind each other buys nothing. The
+   * first failure is what throws; members that had already loaded keep
+   * what they loaded, which is what makes this *not* `reloadAtomic`.
+   */
+  async init() {
+    await Promise.all(this.#configs.map((config) => config.init()));
+
+    return this;
+  }
+
+  /**
+   * Reloads every member, independently.
+   *
+   * A member that refuses keeps its previous document — the engine's
+   * rule, unchanged — and every other member still reloads, so all of
+   * them have their turn and the first failure is thrown at the end
+   * rather than in the middle.
+   */
+  async reload() {
+    const outcomes = await Promise.allSettled(
+      this.#configs.map((config) => config.reload()),
+    );
+
+    for (const outcome of outcomes) {
+      if (outcome.status === "rejected") {
+        throw outcome.reason;
+      }
+    }
+
+    return this;
+  }
+
+  /**
+   * Every member validates, or no member installs.
+   *
+   * The mixed state this exists to prevent: a deployment moves three
+   * files, two parse and one does not, and the process runs on two new
+   * documents and one old one — with nothing in any of them saying so.
+   *
+   * ```js
+   * await group.reloadAtomic()
+   * ```
+   *
+   * Every member loads and validates first; only when all of them have
+   * does any of them install. A refusal leaves every document exactly as
+   * it was, generation included. It is the engine's own `ReloadGroup` —
+   * prepare, then commit — driven from JavaScript.
+   */
+  async reloadAtomic() {
+    const prepared = [];
+
+    try {
+      // Prepared concurrently: the fallible half is I/O, and the whole
+      // point is that none of it installs until all of it has succeeded.
+      const tokens = await Promise.all(
+        this.#configs.map(async (config) => {
+          const native = compiled.get(config);
+
+          return [native, unwrap(await native.prepare())];
+        }),
+      );
+
+      prepared.push(...tokens);
+    } catch (failure) {
+      for (const [native, token] of prepared) {
+        native.discard(token);
+      }
+
+      throw failure;
+    }
+
+    // And committed in order, with nothing fallible in between: a commit
+    // is a swap and the hooks that follow it.
+    while (prepared.length > 0) {
+      const [native, token] = prepared.shift();
+
+      try {
+        unwrap(native.commit(token));
+      } catch (failure) {
+        for (const [other, remaining] of prepared) {
+          other.discard(remaining);
+        }
+
+        throw failure;
+      }
+    }
+
+    return this;
+  }
+
+  /** Starts a watcher for every member. */
+  watch(options) {
+    for (const config of this.#configs) {
+      config.watch(options);
+    }
+
+    return this;
+  }
+
+  /** Stops every watcher this group started. Idempotent. */
+  stopWatching() {
+    for (const config of this.#configs) {
+      config.stopWatching();
+    }
+
+    return this;
+  }
+
+  /**
+   * init, then watch, then stop — the whole lifetime as one call.
+   *
+   * ```js
+   * await group.running(async () => {
+   *   await serve()
+   * })
+   * ```
+   */
+  async running(body, { watch = true, debounceMs, pollMs } = {}) {
+    await this.init();
+
+    if (!watch) {
+      return await body(this);
+    }
+
+    this.watch({ debounceMs, pollMs });
+
+    try {
+      return await body(this);
+    } finally {
+      this.stopWatching();
+    }
+  }
+
+  /** Every member's status, by key — one call for a health endpoint. */
+  status() {
+    return Object.fromEntries(
+      this.#configs.map((config) => [config.key, config.status()]),
+    );
+  }
+
+  /**
+   * Every member's generation, by key.
+   *
+   * Equal numbers promise nothing on their own: members reload
+   * independently unless `reloadAtomic` installed them.
+   */
+  generations() {
+    return Object.fromEntries(
+      this.#configs.map((config) => [config.key, config.generation]),
+    );
+  }
+}
+
 /**
  * Zod, in the four lines it takes.
  *
@@ -725,8 +1278,10 @@ function ajvValidator(validate) {
 }
 
 module.exports = {
+  ConfigGroup,
   DynamicConfig,
   DynamicConfigError,
+  changedPaths,
   zodValidator,
   ajvValidator,
   packageVersion: native.packageVersion,
