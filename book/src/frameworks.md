@@ -23,7 +23,7 @@ app.get("/healthz", (_request, response) => {
 })
 ```
 
-Deliberately **not** `app.locals.config = config.current()`: that copies
+**Not** `app.locals.config = config.current()`: that copies
 the document that was in force at boot, and every later reload lands
 somewhere nobody reads. `examples/07-express.mjs` runs it.
 

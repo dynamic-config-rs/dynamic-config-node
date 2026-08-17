@@ -1,8 +1,7 @@
 # API Reference
 
 Every method, every argument, every default. The TypeScript definitions
-ship with the package, so an editor has all of this too — this page is
-what a reader wants when the editor is not the question.
+ship with the package, so an editor has all of this too.
 
 ## `new DynamicConfig<T>(options)`
 
@@ -63,6 +62,8 @@ All four take effect on the next load.
 | `get(path, fallback?)` | one value by dotted path |
 | `replace(document)` | installs a document directly, without loading: the testing door. `status()` and `snapshot()` still describe the last real load |
 | `changes()` | an async iterator of every installed document |
+| `events({ failurePollMs })` | an async iterator of `reloaded` and `reloadFailed` events. No event carries a value |
+| `await running(body, options?)` | load, watch, run `body`, stop — the whole lifetime as one call, answering what `body` answered |
 | `generation` | how many documents have been installed |
 
 ## Watching and hooks
@@ -72,6 +73,7 @@ All four take effect on the next load.
 | `watch({ debounceMs, pollMs })` | reload on a change; `pollMs` re-stats instead of subscribing |
 | `stopWatching()` | idempotent |
 | `onReload(hook)` | every install, on the loop. Returns a token |
+| `onReloadAsync(hook, { backpressure, onError })` | a hook that awaits: `"latest"` (default), `"serial"` or `"every"`, with a rejection reported rather than unhandled |
 | `onChange(path, hook)` | one path, when it moves, with both values |
 | `removeHook(token)` | `true` if it was there |
 
@@ -80,6 +82,7 @@ All four take effect on the next load.
 | Call | |
 |---|---|
 | `setRemote(fetch, described?)` | a store: a **synchronous** function answering `{ text, format }` |
+| `setRemoteAsync(fetch, described?)` | a store whose `fetch` returns a promise, awaited on the loop by `refreshRemote()` |
 | `await refreshRemote()` | fetch into the remote layer |
 | `clearRemote()` | drop what it gave |
 | `remoteDescription` | what the store calls itself |
@@ -121,6 +124,23 @@ Thrown by every call that can fail.
 
 The same words the Rust `ErrorKind` and the Python exception hierarchy
 use, so the same condition is called the same thing in all three.
+
+## `new ConfigGroup(...configs)`
+
+Several configurations under one lifecycle.
+
+| Call | |
+|---|---|
+| `await init()` | loads every member, concurrently; the first failure throws |
+| `await reload()` | reloads each independently; every member has its turn |
+| `await reloadAtomic()` | every member validates, or none installs |
+| `watch(options?)` / `stopWatching()` | a watcher per member, and stopping all of them |
+| `await running(body, options?)` | init, then watch, then stop |
+| `status()` / `generations()` | per key, for a health endpoint |
+| `configs`, `size`, `[Symbol.iterator]` | the members themselves |
+
+The group is lifecycle, not storage: `database.current()` is still the
+read path, and it keeps the member's own type.
 
 ## Module functions
 

@@ -1,6 +1,6 @@
 # Examples
 
-Twelve of them, each showing one idea. Run from this directory:
+Fifteen of them, each showing one idea. Run from this directory:
 
 ```sh
 node examples/01-quick-start.mjs
@@ -20,6 +20,9 @@ node examples/01-quick-start.mjs
 | [`10-nestjs`](10-nestjs/config.module.ts) | typechecked | A provider with `useFactory`, injected where a `ConfigService` would be |
 | [`11-nextjs`](11-nextjs/) | typechecked | Server components read `current()`; the client gets what the server chose to send |
 | [`12-react`](12-react/README.md) | prose | The honest one: there is no configuration engine in the browser |
+| [`13-config-group`](13-config-group.mjs) | — | `ConfigGroup`: several configurations initialised, watched and stopped as one, and `reloadAtomic()` — every member validates or none installs |
+| [`14-async-callbacks`](14-async-callbacks.mjs) | — | `onReloadAsync` and its backpressure policies, and `events()` — installs and refusals as a stream a log line is built from |
+| [`15-async-remote-source`](15-async-remote-source.mjs) | — | `setRemoteAsync`: a store whose client is async, awaited on the loop rather than kept in a variable by a timer |
 
 **The `.mjs` ones run in CI**, on every Node version this package claims —
 an example that only compiles is not an example. The two TypeScript ones

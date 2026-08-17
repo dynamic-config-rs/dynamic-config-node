@@ -9,8 +9,8 @@ await config.refreshRemote()   // fill the remote layer
 await config.reload()          // resolve and validate it
 ```
 
-Two steps rather than one, and deliberately: a fetch fills a layer, and a
-reload is what resolves every layer and validates the result. The same
+Two steps rather than one: a fetch fills a layer, and a reload is what
+resolves every layer and validates the result. The same
 split `refresh_remote()` and a reload are in Rust, for the same reason —
 a store answering is not the same event as a configuration installing.
 
@@ -21,11 +21,36 @@ should beat what a package shipped, and lose to a variable exported for
 this one run. A mounted secret (`secretsDir`) beats it too, for the same
 argument — it is a fact about *this* deployment.
 
-## The fetch must be synchronous
+## Two doors: a synchronous fetch, and an async one
 
-It is called from a worker thread through the event loop, and a promise
-cannot be awaited from there. An async source keeps its own last answer
-and hands that over:
+`setRemote` takes a **synchronous** function. It is called from a worker
+thread through the event loop, and a promise cannot be awaited from there
+— so a store whose client is async has its own door:
+
+```ts
+config.setRemoteAsync(async () => {
+  const response = await fetch(URL, { signal: AbortSignal.timeout(5_000) })
+
+  if (!response.ok) {
+    throw new Error(`the control plane said ${response.status}`)
+  }
+
+  return { text: await response.text(), format: "json" }
+}, "our control plane")
+
+await config.refreshRemote()
+```
+
+`refreshRemote()` awaits the fetch on the loop that called it and hands
+the engine the document that came back. Two things follow from that
+ordering: the deadline is yours — `AbortSignal.timeout` rather than the
+30-second wall the synchronous door has to impose — and a rejection
+reaches the caller as its own error rather than as a `remote` failure,
+because nothing has entered the engine yet.
+
+Before this door existed the advice was to keep the last answer in a
+variable and hand that over, and it still works when a store is polled on
+a schedule of its own:
 
 ```ts
 let latest = { text: "{}", format: "json" as const }
@@ -37,9 +62,9 @@ setInterval(async () => {
 config.setRemote(() => latest, "our config service")
 ```
 
-That is not a limitation being worked around: a configuration read should
-not block on a network call it did not schedule, which is why the Rust
-crate makes `refresh_remote()` explicit as well.
+Either way the fetch is *explicit*: a configuration read should not block
+on a network call it did not schedule, which is why the Rust crate makes
+`refresh_remote()` explicit as well.
 
 ## What the status says
 

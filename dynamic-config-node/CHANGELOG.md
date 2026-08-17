@@ -12,6 +12,63 @@ release has nothing in it for a Node user.
 
 ## [Unreleased]
 
+## 0.0.3 — 2026-08-18
+
+### Added
+
+- **`ConfigGroup`: several configurations under one lifecycle.**
+  `new ConfigGroup(db, cache, queue)` initialises, watches, reports and
+  stops its members together — `await group.running(async () => …)` is
+  load, watch, run, stop — and `status()` / `generations()` answer per key
+  for a health endpoint. The group owns lifecycle, not storage:
+  `db.current()` is still the read path, with the member's own type.
+
+- **`group.reloadAtomic()`: every member validates, or none installs.**
+  The engine's prepare-then-commit — `ReloadGroup`, which Rust callers
+  have had since 0.4 — driven from JavaScript. A refusal leaves every
+  document exactly as it was, generation included, instead of leaving a
+  deployment half-applied across two configurations.
+
+- **`events()`: installs and refusals as typed events.** An async iterator
+  of `{ type: "reloaded", generation, at, changed, reason }` and
+  `{ type: "reloadFailed", generation, at, kind, path, consecutive }` — a
+  discriminated union a `switch` narrows. **No event carries a value**,
+  the same rule `explain()` and `check()` follow. `failurePollMs` opts
+  into checking for refusals, which nothing can wake a stream for: a load
+  that installed nothing bumps no generation.
+
+- **`onReloadAsync(hook, { backpressure, onError })`.** An `async` hook
+  handed to `onReload` leaves a promise nobody awaits — two installs run
+  their bodies interleaved, and a rejection becomes an unhandled one.
+  This awaits it, keeps only the newest install by default (`"latest"`,
+  next to `"serial"` and `"every"`), reports a rejection instead of
+  dropping it, and hands the hook an `AbortSignal` that is aborted when a
+  newer install supersedes the call.
+
+- **`setRemoteAsync(fetch, described?)`: a store whose client is async.**
+  `refreshRemote()` awaits the fetch on the calling loop and hands the
+  engine the document that came back, so an `await fetch(...)` needs no
+  variable kept up to date by a timer. The deadline stays yours
+  (`AbortSignal.timeout`), and a rejection reaches the caller as its own
+  error rather than as a `remote` failure, because nothing has entered
+  the engine yet.
+
+- **`config.running(body, options?)`.** Load, watch, run, stop as one
+  call. JavaScript has no `with`, so the block is a function; what it buys
+  is the same thing — a watcher that cannot be left running by an
+  exception on the way out.
+
+- **`changedPaths(before, after)`.** Which dotted paths differ between two
+  documents — paths, never values. What `events()` reports, exported for
+  the code that wants to make the comparison itself.
+
+### Changed
+
+- **A Telemetry & Health chapter**, where `status()`, `remoteStatus()` and
+  the liveness/readiness split had been scattered through *Patterns & Style*
+  and *Stability*. The book also has parts now: *Guide*, *Use Cases*,
+  *Advanced* and *Reference*.
+
 ## 0.0.2 — 2026-08-16
 
 ### Changed

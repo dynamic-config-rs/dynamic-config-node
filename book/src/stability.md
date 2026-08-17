@@ -1,25 +1,33 @@
 # Stability & Production Use
 
-**Beta, and the surface is finished for 0.x.**
+**Beta. The engine's surface is finished for 0.x; the binding's is not
+quite.**
 
 `dynamic-config-node` and `dynamic-config-node-remote` are Beta, like
-every crate and package in this repository. Between here and 1.0, **only
-security fixes and hotfixes land**: no new sources, no new schema doors,
-no new methods on the settled types. What still ships is a defect that
-produces a wrong answer, a security advisory, and documentation — each as
-a patch.
+every crate and package in this organisation. What that promise covers is
+precise, and it changed once:
 
-That is a change of intent rather than of policy, and it is worth saying
-plainly because the two look identical from outside: a project that
-publishes weekly because it is growing and one that publishes rarely
-because it is finished are both quiet. This is the second.
+- **The engine — sources, layering, validation, diagnostics — is
+  settled.** No new sources, no new schema doors, no new methods on the
+  settled types. What ships there is a defect that produces a wrong
+  answer, a security advisory, and documentation.
+- **The binding's concurrency surface was not settled, and 0.0.3 says
+  so.** `ConfigGroup`, `events()`, `onReloadAsync` and `setRemoteAsync`
+  are additions to this package, made after using the earlier surface
+  from a Node service and finding the seams. Additive, so nothing written
+  against 0.0.2 changed meaning — but they are additions rather than
+  hotfixes, and the version says so.
+
+After that the intent is the earlier one again: security fixes, hotfixes,
+documentation. If it changes a second time it will be written here in the
+same place, rather than discovered in a diff.
 
 ## What that means for your program
 
 **Pin the minor version and take patches automatically.**
 
 ```json
-{ "dependencies": { "dynamic-config-node": "~0.0.1" } }
+{ "dependencies": { "dynamic-config-node": "~0.0.3" } }
 ```
 
 A patch will not break you. Pre-1.0 a break bumps the minor, is called out

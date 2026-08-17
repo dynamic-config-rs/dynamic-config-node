@@ -34,10 +34,17 @@ commit.
 2. **Pre-flight.** `just check` on `dev`. It needs Node 18+ and nothing
    else; install TypeScript if you want the type gate to run rather than
    skip.
-3. **Bump both `package.json` files to the same version**, move each
-   changelog's `## [Unreleased]` block under a dated heading, and commit.
-   There is no `cargo release` here: these crates are excluded from
-   crates.io entirely, and two files are two files.
+3. **Bump both `package.json` files to the same version — and the addon's
+   `peerDependencies` range with them** — move each changelog's
+   `## [Unreleased]` block under a dated heading, and commit. There is no
+   `cargo release` here: these crates are excluded from crates.io entirely,
+   and two files are two files.
+
+   The peer range is the one that goes stale silently. npm's caret pins the
+   patch below 0.1.0, so `^0.0.2` names 0.0.2 and nothing else: a range left
+   behind makes the matching pair refuse to resolve. `manifests.test.js`
+   fails the suite when it drifts, which is why the bump is three edits and
+   not two.
 4. **Read the commit.** Both versions equal, both changelogs rotated,
    `Unreleased` empty again.
 5. **`./scripts/promote.sh`.** Pushes `dev`, opens or updates the pull

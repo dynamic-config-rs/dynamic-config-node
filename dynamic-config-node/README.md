@@ -46,7 +46,11 @@ config.get("pool.maxSize", 8)          // …or one value, by dotted path
 
 config.onReload((document) => …)       // every install
 config.onChange("pool.maxSize", …)     // one path, when it moves
+config.onReloadAsync(async (doc) => …) // …and one that awaits, latest wins
 for await (const doc of config.changes()) …   // …or as an async iterator
+for await (const event of config.events()) …  // installs and refusals, typed
+
+await config.running(async (doc) => …) // load, watch, serve, stop
 
 config.setDefaults({ pool: { maxSize: 8 } })  // a whole object as defaults
 config.replace(document)                      // install one directly, no sources
@@ -63,6 +67,21 @@ config.status()                        // for a health endpoint
 schema refuses leaves the previous document serving and reports the
 failure; that is the property the whole design is for, and it holds for a
 watcher-driven reload exactly as it does for an explicit one.
+
+Several configurations that share a lifetime can say so:
+
+```ts
+const group = new ConfigGroup(database, cache, queue)
+
+await group.running(async () => {
+  await serve()
+})
+
+await group.reloadAtomic()   // every member validates, or none installs
+```
+
+The group owns lifecycle, not storage — `database.current()` is still the
+read, and still typed as the member's own.
 
 ## Errors carry what a program branches on
 
@@ -84,9 +103,16 @@ use, so the same condition is called the same thing in all three.
 
 ## Remote stores
 
-A store is a function that answers `{ text, format }`:
+A store is a function that answers `{ text, format }` — synchronous for
+`setRemote`, and a promise for `setRemoteAsync`, which `refreshRemote()`
+awaits on the loop before the engine sees anything:
 
 ```ts
+config.setRemoteAsync(async () => ({
+  text: await (await fetch(URL, { signal: AbortSignal.timeout(5_000) })).text(),
+  format: "json",
+}), "our control plane")
+
 config.setRemote(() => latest, "our config service")
 await config.refreshRemote()   // fill the remote layer
 await config.reload()          // resolve and validate it
