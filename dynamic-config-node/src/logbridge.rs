@@ -37,22 +37,38 @@ pub fn set_log_sink(handler: Function<(String, String), ()>) -> napi::Result<()>
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(function);
 
     dynamic_config::set_log_sink(|level, line| {
-        let guard = LOGGER
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // The engine's sink contract: called on watcher threads, must not
+        // block, must not take the thread down. A panic here would kill
+        // the watcher that was mid-reload, so nothing below may unwind.
+        let delivered = std::panic::catch_unwind(|| {
+            let guard = LOGGER
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        if let Some(logger) = guard.as_ref() {
-            let name = match level {
-                LogLevel::Warn => "warn",
-                _ => "info",
-            };
+            if let Some(logger) = guard.as_ref() {
+                let name = match level {
+                    LogLevel::Warn => "warn",
+                    _ => "info",
+                };
 
-            // Unbounded queue: `NonBlocking` sheds only when the loop
-            // itself has gone away, exactly as reload hooks do.
-            logger.call(
-                (name.to_string(), line.to_string()),
-                ThreadsafeFunctionCallMode::NonBlocking,
-            );
+                // Unbounded queue: `NonBlocking` sheds only when the loop
+                // itself has gone away, exactly as reload hooks do — and a
+                // status saying so is reported, not swallowed: a logger
+                // that drops lines silently is the failure mode this
+                // bridge exists to end.
+                let status = logger.call(
+                    (name.to_string(), line.to_string()),
+                    ThreadsafeFunctionCallMode::NonBlocking,
+                );
+
+                if status != napi::Status::Ok {
+                    eprintln!("[dynamic-config] logger unreachable ({status:?}): {line}");
+                }
+            }
+        });
+
+        if delivered.is_err() {
+            eprintln!("[dynamic-config] logger panicked; the line follows: {line}");
         }
     });
 

@@ -110,6 +110,29 @@ jobs:
       # so `--all-targets` over the workspace cannot reach either crate.
       - run: cargo clippy -p dynamic-config-node --lib --all-features
       - run: cargo clippy -p dynamic-config-node-remote --lib --all-features
+  node-macos:
+    needs: [changes]
+    if: needs.changes.outputs.js == 'true' || github.event_name != 'pull_request'
+    # macOS ran only in the RELEASE prebuild matrix, which is how an
+    # FSEvents-only failure shipped its way to a red release run before
+    # any pull request could see it. One macOS leg here closes that gap;
+    # one Node line suffices — the per-line claims are the linux matrix's.
+    name: the Node bindings on macOS
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v5
+        with:
+          node-version: "22"
+      - run: cargo build -p dynamic-config-node --release
+      - run: cp target/release/libdynamic_config_node.dylib dynamic-config-node/index.node
+      - run: node --test tests/*.test.js
+        working-directory: dynamic-config-node
   node:
     needs: [changes]
     if: needs.changes.outputs.js == 'true' || github.event_name != 'pull_request'
@@ -307,6 +330,7 @@ jobs:
       - fmt
       - clippy
       - node
+      - node-macos
       - node-remote
       - msrv
       - docs
