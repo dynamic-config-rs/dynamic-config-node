@@ -56,10 +56,16 @@ pub fn set_log_sink(handler: Function<(String, String), ()>) -> napi::Result<()>
                 // status saying so is reported, not swallowed: a logger
                 // that drops lines silently is the failure mode this
                 // bridge exists to end.
+                // DIAGNOSTIC (dev-branch only): bracket the call so a log
+                // that never returns is visible as an unmatched line.
+                eprintln!("[sink-diag] calling ({name}): {line}");
+
                 let status = logger.call(
                     (name.to_string(), line.to_string()),
                     ThreadsafeFunctionCallMode::NonBlocking,
                 );
+
+                eprintln!("[sink-diag] returned {status:?}");
 
                 if status != napi::Status::Ok {
                     eprintln!("[dynamic-config] logger unreachable ({status:?}): {line}");
