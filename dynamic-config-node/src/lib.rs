@@ -24,6 +24,7 @@
 use napi_derive::napi;
 
 mod config;
+mod logbridge;
 mod outcome;
 mod remote;
 mod validate;

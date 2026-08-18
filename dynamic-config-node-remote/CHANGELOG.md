@@ -8,6 +8,17 @@ base package, and a gap between them is a pair nobody built.
 
 ## [Unreleased]
 
+## 0.0.4 — 2026-08-18
+
+### Changed
+
+- **The single 1,651-line module is five.** `lib.rs` keeps the front
+  door; the off-loop task machinery, the TLS options object, the watch
+  handle and the eight store classes each have a file. Nothing public
+  moved — the `.d.ts` is unchanged and the suite runs against the same
+  surface — and the constructors' signature drift-test now reads
+  `stores.rs`, where the constructors live.
+
 ## 0.0.3 — 2026-08-18
 
 ### Fixed

@@ -96,7 +96,7 @@ export interface RemoteStatus {
 /** What a remote source answers with. */
 export interface Document {
   readonly text: string;
-  readonly format: "json" | "toml" | "yaml";
+  readonly format: "json" | "toml" | "yaml" | "ini" | "properties";
 }
 
 /** A document installed, as `events()` reports it. */
@@ -420,3 +420,23 @@ export function packageVersion(): string;
 
 /** The engine it was built against, which moves on its own schedule. */
 export function engineVersion(): string;
+
+/**
+ * Routes the engine's own diagnostics — one line per reload, a warning per
+ * failed one — to a handler instead of stderr.
+ *
+ * Without a handler the engine writes plain `[dynamic-config]` lines to
+ * stderr, as it always has. The handler runs on the event loop, never on
+ * the watcher thread, and does not keep the process alive. `setLogger(null)`
+ * restores the default entirely.
+ */
+export function setLogger(
+  options:
+    | {
+        /** `"off"`, `"warn"` or `"info"` (default): the engine-side volume. */
+        level?: "off" | "warn" | "info";
+        /** Where the lines go; `null` restores stderr. */
+        handler?: ((level: "info" | "warn", line: string) => void) | null;
+      }
+    | null,
+): void;

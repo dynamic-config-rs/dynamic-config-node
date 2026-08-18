@@ -1277,11 +1277,51 @@ function ajvValidator(validate) {
   };
 }
 
+/**
+ * Routes the engine's own diagnostics — one line per reload, a warning
+ * per failed one — to a handler of yours instead of stderr.
+ *
+ *     setLogger({ handler: (level, line) => log[level](line) });
+ *     setLogger({ level: "warn" });          // quieter, still stderr
+ *     setLogger(null);                        // back to the default
+ *
+ * `level` is `"off"`, `"warn"` or `"info"` (the default); it gates the
+ * engine's emission wherever the lines are going. `handler` receives
+ * `("info" | "warn", line)` on the event loop — never on the watcher
+ * thread — and holding one registered does not keep the process alive.
+ * Without a handler the engine keeps writing `[dynamic-config]` lines to
+ * stderr, unchanged since 0.0.1: Node has no one logging module to bridge
+ * to by default, so the default stays put and the seam is yours.
+ */
+function setLogger(options) {
+  if (options === null) {
+    native._clearLogSink();
+    native._setLogLevel("info");
+    return;
+  }
+
+  const { level, handler } = options ?? {};
+
+  if (handler !== undefined) {
+    if (handler === null) {
+      native._clearLogSink();
+    } else {
+      // The native side hands the pair across as one array argument.
+      native._setLogSink(([name, line]) => handler(name, line));
+    }
+  }
+
+  if (level !== undefined) {
+    native._setLogLevel(level);
+  }
+}
+
 module.exports = {
   ConfigGroup,
   DynamicConfig,
   DynamicConfigError,
   changedPaths,
+  setLogger,
   zodValidator,
   ajvValidator,
   packageVersion: native.packageVersion,

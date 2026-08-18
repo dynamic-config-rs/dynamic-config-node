@@ -1,6 +1,6 @@
 {
   "name": "dynamic-config-node-remote",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "The eight Rust remote stores for dynamic-config's Node bindings",
   "keywords": [
     "config",
@@ -42,7 +42,7 @@
     "LICENSE"
   ],
   "peerDependencies": {
-    "dynamic-config-node": "^0.0.3"
+    "dynamic-config-node": "^0.0.4"
   },
   "scripts": {
     "test": "node --test tests/*.test.js",

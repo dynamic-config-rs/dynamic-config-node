@@ -123,4 +123,7 @@ this library cannot stop you making.
 
 **Nothing here needs a sidecar, an agent or a server.** The engine is in
 your process; the only thing that leaves is what a store you configured
-goes to fetch.
+goes to fetch. (The organisation's Kubernetes integration *offers* an
+agent, for pods that want files rendered for them — a deployment choice
+layered on top, not a requirement of this library, and this sentence
+stays true either way.)

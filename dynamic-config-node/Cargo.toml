@@ -24,6 +24,9 @@ dynamic-config = { workspace = true, features = [
     "json",
     "toml",
     "yaml",
+    # The two flat formats: no dependency, no floor movement.
+    "ini",
+    "properties",
     "watch",
     "async",
     "dotenv",

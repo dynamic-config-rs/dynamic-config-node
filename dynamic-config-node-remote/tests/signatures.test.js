@@ -37,7 +37,7 @@ function parameter(line) {
 }
 
 test("a store's summary line is its signature", () => {
-  const source = readFileSync(join(__dirname, "..", "src", "lib.rs"), "utf8");
+  const source = readFileSync(join(__dirname, "..", "src", "stores.rs"), "utf8");
   const lines = source.split("\n");
 
   const wrong = [];
@@ -92,7 +92,7 @@ test("a store's summary line is its signature", () => {
 
     if (claimed.join(", ") !== taken.join(", ")) {
       wrong.push(
-        `src/lib.rs:${number + 1}: says (${claimed.join(", ")}), and it takes (${taken.join(", ")})`,
+        `src/stores.rs:${number + 1}: says (${claimed.join(", ")}), and it takes (${taken.join(", ")})`,
       );
     }
   }
