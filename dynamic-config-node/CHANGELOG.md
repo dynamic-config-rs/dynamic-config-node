@@ -12,6 +12,28 @@ release has nothing in it for a Node user.
 
 ## [Unreleased]
 
+
+### Added
+
+- **`setLogger({ level, handler })`.** The engine's own diagnostics —
+  one line per reload, a warning per failed one — can now be routed to a
+  handler of yours instead of stderr: `handler("info" | "warn", line)`
+  runs on the event loop, never on the watcher thread, and holding one
+  registered does not keep the process alive. Without it nothing
+  changes: the `[dynamic-config]` stderr lines stay exactly as they
+  were, because Node has no single logging module a library should
+  choose for its users. `setLogger(null)` restores the default; `level`
+  ("off" | "warn" | "info") gates emission wherever the lines go.
+
+### Changed
+
+- **The reload-hook delivery contract is now written down and tested.**
+  The queue behind `onReload` has always been unbounded, so a reload storm
+  delivers every call in order — but nothing said so and nothing proved
+  it. A comment at the call site now states the one case that sheds a
+  call (an event loop that has gone away), and `tests/hooks.test.js`
+  holds two hundred reloads to exactly two hundred ordered deliveries.
+
 ## 0.0.3 — 2026-08-18
 
 ### Added

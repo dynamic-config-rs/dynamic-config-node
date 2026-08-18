@@ -47,3 +47,11 @@ dynamic-config-vault = "0.6"
 lto = "thin"
 codegen-units = 1
 strip = "symbols"
+
+# ── 0.7 TRAIN, DEVELOPMENT ONLY ─────────────────────────────────────────
+# Same arrangement as the Python repo, same guard: the addon is being
+# built against engine API that is not on crates.io yet, and the release
+# script refuses to prepare a release while this patch is present.
+[patch.crates-io]
+dynamic-config = { path = "../dynamic-config/dynamic-config" }
+dynamic-config-macros = { path = "../dynamic-config/dynamic-config-macros" }

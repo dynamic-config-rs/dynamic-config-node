@@ -4,6 +4,7 @@
 
 # Guide
 
+- [Quick Start](quick-start.md)
 - [API Reference](reference.md)
 - [Schemas](schemas.md)
 - [Watching & Hooks](watching.md)

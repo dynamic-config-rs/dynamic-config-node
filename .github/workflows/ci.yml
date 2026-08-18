@@ -198,6 +198,53 @@ jobs:
       - run: node --test tests/*.test.js
         working-directory: dynamic-config-node-remote
 
+  msrv:
+    needs: [changes]
+    if: needs.changes.outputs.rust == 'true' || github.event_name != 'pull_request'
+    name: the declared floor compiles
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+      # A lockfile resolved by stable, then checked by the floor — the
+      # combination a user's `npm install` + our build actually produces.
+      - run: cargo generate-lockfile
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: "1.85"
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          shared-key: msrv
+      # `--lib`: the addon has no test targets on the Rust side, and dev
+      # dependencies track stable.
+      - run: cargo +1.85 check -p dynamic-config-node --locked --lib
+      # The stores pull heavier trees; their floor is higher and its own.
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: "1.88"
+      - run: cargo +1.88 check -p dynamic-config-node-remote --locked --lib
+
+  docs:
+    needs: [changes]
+    if: needs.changes.outputs.rust == 'true' || github.event_name != 'pull_request'
+    name: rustdoc is clean
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          shared-key: check
+      - run: cargo doc --workspace --no-deps
+
   docs-links:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name != 'pull_request'
@@ -253,6 +300,8 @@ jobs:
       - clippy
       - node
       - node-remote
+      - msrv
+      - docs
       - docs-links
       - actionlint
     if: always()

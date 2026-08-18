@@ -222,6 +222,12 @@ impl Inner {
         {
             // Non-blocking: a hook that cannot be queued is a loop that has
             // gone away, and a reload is not the place to find that out.
+            // That is the *only* way this sheds a call — the queue behind
+            // it is unbounded (napi's builder defaults `MaxQueueSize` to 0,
+            // which N-API documents as "no limit"), so a reload storm
+            // delivers every call, in order, however far the loop lags.
+            // `manifests`-style proof lives in tests: `a reload storm
+            // reaches every hook exactly once`.
             hook.call(model.clone(), ThreadsafeFunctionCallMode::NonBlocking);
         }
     }
