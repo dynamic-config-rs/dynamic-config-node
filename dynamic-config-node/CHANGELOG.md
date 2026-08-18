@@ -12,6 +12,8 @@ release has nothing in it for a Node user.
 
 ## [Unreleased]
 
+## 0.0.4 — 2026-08-18
+
 
 ### Added
 

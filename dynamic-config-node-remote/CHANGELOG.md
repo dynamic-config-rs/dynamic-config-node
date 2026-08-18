@@ -8,6 +8,8 @@ base package, and a gap between them is a pair nobody built.
 
 ## [Unreleased]
 
+## 0.0.4 — 2026-08-18
+
 ### Changed
 
 - **The single 1,651-line module is five.** `lib.rs` keeps the front
