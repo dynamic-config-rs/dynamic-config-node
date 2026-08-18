@@ -44,8 +44,16 @@ test("a handler receives the reload line, on the loop", async () => {
 
     config.watch({ debounceMs: 20 });
     try {
-      writeFileSync(file, JSON.stringify({ app: { n: 3 } }));
-      await drain(() => lines.some(([, l]) => l.includes("reloaded")));
+      // Keep writing until a line lands: macOS's FSEvents stream arms
+      // asynchronously, so a single write racing `watch()` can precede
+      // the stream and never produce an event. Repeated writes assert
+      // what this test is about — delivery — rather than arming latency.
+      let n = 3;
+      const deadline = Date.now() + 5000;
+      while (!lines.some(([, l]) => l.includes("reloaded")) && Date.now() < deadline) {
+        writeFileSync(file, JSON.stringify({ app: { n: n++ } }));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
     } finally {
       config.stopWatching();
     }
@@ -74,9 +82,15 @@ test("the level gates what the handler sees", async () => {
 
     config.watch({ debounceMs: 20 });
     try {
-      writeFileSync(file, JSON.stringify({ app: { n: 2 } }));
-      await drain(() => config.generation >= 2).catch(() => {});
-
+      // Driven writes, as above: the absence assertion below is only
+      // meaningful once a reload demonstrably happened.
+      let n = 2;
+      const deadline = Date.now() + 5000;
+      while (config.generation < 2 && Date.now() < deadline) {
+        writeFileSync(file, JSON.stringify({ app: { n: n++ } }));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      assert.ok(config.generation >= 2, "no reload happened; nothing was gated");
     } finally {
       await new Promise((resolve) => setTimeout(resolve, 300));
       config.stopWatching();
