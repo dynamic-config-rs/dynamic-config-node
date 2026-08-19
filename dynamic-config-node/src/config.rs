@@ -89,6 +89,10 @@ struct Inner {
     /// `ThreadsafeFunction`, so the watcher thread can fire it without
     /// touching a JavaScript value.
     hooks: Mutex<Vec<(u64, Callable<Value, ()>)>>,
+    /// The failure twin: called with `Null` after every refused reload.
+    /// No payload on purpose — the loop reads `status()` itself, so no
+    /// value (and no error text) crosses this boundary.
+    failure_hooks: Mutex<Vec<(u64, Callable<Value, ()>)>>,
     next_hook: AtomicU64,
     layers: Layers,
     /// Commits that `prepare` produced and `commit` has not run yet, by
@@ -254,6 +258,25 @@ impl Inner {
             dynamic.on_reload(move |_previous, current| {
                 if let Some(inner) = weak.upgrade() {
                     inner.commit(current);
+                }
+            });
+
+            // The refusal wake for `events()`: same non-blocking delivery
+            // as an install's hooks, no payload.
+            let weak: Weak<Inner> = Arc::downgrade(this);
+
+            dynamic.on_reload_failed(move |_status| {
+                let Some(inner) = weak.upgrade() else {
+                    return;
+                };
+
+                for (_, hook) in inner
+                    .failure_hooks
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .iter()
+                {
+                    hook.call(Value::Null, ThreadsafeFunctionCallMode::NonBlocking);
                 }
             });
 
@@ -497,6 +520,7 @@ impl Config {
             cache: RwLock::new(None),
             generation: AtomicU64::new(0),
             hooks: Mutex::new(Vec::new()),
+            failure_hooks: Mutex::new(Vec::new()),
             next_hook: AtomicU64::new(1),
             layers,
             prepared: Mutex::new(HashMap::new()),
@@ -885,6 +909,43 @@ impl Config {
             .push((token, function));
 
         Ok(token as u32)
+    }
+
+    /// Calls `hook` on the event loop after every *refused* reload, with
+    /// no argument: what happened is `status()`'s to tell, and reading it
+    /// there keeps values (and error text) off this path entirely.
+    #[napi(js_name = "onReloadFailed")]
+    pub fn on_reload_failed(&self, hook: Function<Value, ()>) -> napi::Result<u32> {
+        let token = self.inner.next_hook.fetch_add(1, Ordering::SeqCst);
+        let function = hook
+            .build_threadsafe_function()
+            .weak::<true>()
+            .callee_handled::<false>()
+            .build()?;
+
+        self.inner
+            .failure_hooks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push((token, function));
+
+        Ok(token as u32)
+    }
+
+    /// The failure list's `removeHook`. Tokens do not cross lists: a
+    /// reload hook's token removes nothing here, and vice versa.
+    #[napi(js_name = "removeFailureHook")]
+    pub fn remove_failure_hook(&self, token: u32) -> bool {
+        let mut hooks = self
+            .inner
+            .failure_hooks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = hooks.len();
+
+        hooks.retain(|(registered, _)| *registered != u64::from(token));
+
+        hooks.len() != before
     }
 
     #[napi(js_name = "removeHook")]

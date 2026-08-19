@@ -12,6 +12,39 @@ release has nothing in it for a Node user.
 
 ## [Unreleased]
 
+### Added
+
+- **`onReloadFailed(hook)` / `removeFailureHook(token)`.** The failure
+  twin of `onReload`, called on the event loop after every reload that
+  installs nothing — with no argument, because what happened is
+  `status()`'s to tell and reading it there keeps values and error text
+  out of the hook path.
+
+- **`AbortSignal`, everywhere a lifetime is.** `watch({ signal })`
+  stops the watcher on abort; `changes({ signal })` and
+  `events({ signal })` end their iteration — a `return`, not an error,
+  exactly as a `break` would. The idiom the rest of Node uses for
+  "until this says stop", so a stream or a watcher can share the
+  lifetime of a server, a request or a test without a matching
+  teardown call to forget.
+
+### Changed
+
+- **A refused reload wakes `events()` natively.** The engine's 0.7.1
+  failure hook reaches the loop the same way an install's does, so
+  `reloadFailed` arrives when the refusal happens — no timer, no
+  polling, nothing keeping the process up. Delivery is latest-wins:
+  coalesced refusals arrive as one event carrying the current
+  `consecutive` count, and a refusal followed by an install arrives as
+  both events, refusal first. The limitations page's "a refused reload
+  cannot wake anything" section retires with this.
+
+### Deprecated
+
+- **`events({ failurePollMs })`** is accepted, ignored, and warns once
+  (`DYNAMIC_CONFIG_FAILURE_POLL`): the interval refusals were polled at,
+  now that they wake the stream themselves. Remove the option.
+
 ## 0.0.4 — 2026-08-18
 
 

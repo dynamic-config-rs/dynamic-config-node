@@ -103,10 +103,9 @@ console.log("\nand the diagnostic stream, for a log or an alert");
 
 const events = [];
 const stream = (async () => {
-  // `failurePollMs` is what makes a refusal visible: an install wakes this
-  // stream and a refusal cannot, because a load that installed nothing
-  // bumps no generation.
-  for await (const event of config.events({ failurePollMs: 50 })) {
+  // A refusal wakes this stream natively — the engine's failure hook
+  // reaches the loop the same way an install's does, so nothing polls.
+  for await (const event of config.events()) {
     events.push(event);
 
     if (event.type === "reloadFailed") {

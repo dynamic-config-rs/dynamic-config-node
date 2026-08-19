@@ -184,6 +184,16 @@ export interface Options<T> {
   fields?: string[];
 }
 
+/**
+ * Structurally the platform's `AbortSignal` — declared here so these
+ * types stand without `lib.dom`; a real `AbortSignal` satisfies it.
+ */
+export interface AbortSignalLike {
+  readonly aborted: boolean;
+  addEventListener(type: "abort", listener: () => void, options?: { once?: boolean }): void;
+  removeEventListener(type: "abort", listener: () => void): void;
+}
+
 export interface WatchOptions {
   /** How long to wait for an editor to finish writing. 250 by default. */
   debounceMs?: number;
@@ -193,6 +203,12 @@ export interface WatchOptions {
    * events.
    */
   pollMs?: number;
+  /**
+   * Stops the watcher when it aborts — so a watcher can share the
+   * lifetime of a server or a test without a matching `stopWatching()`
+   * call to forget.
+   */
+  signal?: AbortSignalLike;
 }
 
 /**
@@ -275,17 +291,29 @@ export class DynamicConfig<T = unknown> {
    * Every installed document, as an async iterator — the shape a service
    * loop wants, and the one where an `await` costs only the caller.
    */
-  changes(): AsyncGenerator<T, void, void>;
+  changes(options?: {
+    /** ends the iteration on abort — a `return`, not an error */
+    signal?: AbortSignalLike;
+  }): AsyncGenerator<T, void, void>;
   /**
    * Every install *and* every refusal, as typed events: the diagnostic
    * stream a log line, a metric or an alert is built from.
    *
-   * `failurePollMs` is what makes `reloadFailed` possible — an install
-   * wakes this stream and a refusal cannot, because a load that installed
-   * nothing bumps no generation. Omitted, the stream reports installs
-   * only and starts no timer.
+   * A refusal wakes this stream natively — no timer, no polling.
+   * Delivery is latest-wins: coalesced refusals arrive as one event
+   * carrying the current `consecutive` count, and a refusal followed by
+   * an install arrives as both events, refusal first.
+   *
+   * `failurePollMs` is deprecated and ignored: the interval refusals
+   * used to be polled at, before they could wake anything. Passing it
+   * changes nothing and warns once.
    */
-  events(options?: { failurePollMs?: number }): AsyncGenerator<ConfigEvent, void, void>;
+  events(options?: {
+    /** ends the iteration on abort — a `return`, not an error */
+    signal?: AbortSignalLike;
+    /** @deprecated ignored — refusals wake the stream natively now */
+    failurePollMs?: number;
+  }): AsyncGenerator<ConfigEvent, void, void>;
   /**
    * Load, watch, run, stop — the whole lifetime of a service as one call.
    *
@@ -318,6 +346,15 @@ export class DynamicConfig<T = unknown> {
   ): number;
   onChange<V = unknown>(path: string, hook: (now: V, before: V) => void): number;
   removeHook(token: number): boolean;
+  /**
+   * The failure twin of `onReload`: called after every reload that
+   * installs nothing, with no argument — read `status()` for what
+   * happened, which keeps values and error text out of the hook path.
+   * Returns the token `removeFailureHook` takes; the two token spaces do
+   * not cross.
+   */
+  onReloadFailed(hook: () => void): number;
+  removeFailureHook(token: number): boolean;
 
   // Remote stores.
   /**

@@ -1,0 +1,53 @@
+name: Nightly
+
+# The binding-side leak budget: callback and notifier lifecycles are
+# where leaks hide even when the Rust core is clean. The engine's
+# nightly carries the 5-hour soak; these legs churn the binding's own
+# machinery a million times and hold the deltas to a budget.
+on:
+  schedule:
+    - cron: "23 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  leak:
+    name: a million reloads leak nothing
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v5
+        with:
+          node-version: "22"
+      - run: npm install --no-save --no-fund --no-audit dynamic-config-node
+      - run: LEAK_RELOADS=1000000 CONFORMANCE_PACKAGE=dynamic-config-node node --expose-gc scripts/leak.mjs
+
+  # The macOS setLogger investigation's un-skip gate, exactly as
+  # OUTSTANDING records it: run the two delivery tests on a HOSTED
+  # macos-14 runner with the skip lifted. Reproduces → the bug is real
+  # on hosted hardware and gets investigated there; passes → that fact
+  # narrows the silence to the local runner's FSEvents, and is recorded.
+  # Either result moves the investigation; a skip moves nothing.
+  maclogger:
+    name: setLogger delivery on hosted macOS
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v5
+        with:
+          node-version: "22"
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: npm run build
+        working-directory: dynamic-config-node
+      - run: npm install --no-fund --no-audit
+        working-directory: dynamic-config-node
+      # The skip is keyed on `darwin`; lifting it here is one variable.
+      - run: DYNAMIC_CONFIG_MAC_LOGGER_GATE=1 node --test tests/logging.test.js
+        working-directory: dynamic-config-node

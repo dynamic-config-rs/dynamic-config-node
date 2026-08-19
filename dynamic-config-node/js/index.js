@@ -537,8 +537,14 @@ class DynamicConfig {
    * to a size nobody is asking for any more is work done for nothing —
    * and the wrong one for an audit log, which wants `onReload`, where
    * every install arrives.
+   *
+   * @param {object} [options]
+   * @param {AbortSignal} [options.signal] ends the iteration when it
+   *   aborts — a `return`, not an error, exactly as a `break` in the
+   *   caller's loop would end it. What lets a stream share the lifetime
+   *   of a request or a server instead of needing its own.
    */
-  async *changes() {
+  async *changes({ signal } = {}) {
     let pending;
     let wake;
 
@@ -548,13 +554,24 @@ class DynamicConfig {
       pending = document;
       wake?.();
     });
+    const onAbort = () => wake?.();
+
+    signal?.addEventListener("abort", onAbort, { once: true });
 
     try {
       for (;;) {
+        if (signal?.aborted) {
+          return;
+        }
+
         if (pending === undefined) {
           await new Promise((resolve) => {
             wake = resolve;
           });
+        }
+
+        if (signal?.aborted) {
+          return;
         }
 
         const document = pending;
@@ -567,6 +584,7 @@ class DynamicConfig {
     } finally {
       // A `break` or a `return` in the caller's loop lands here.
       this.removeHook(token);
+      signal?.removeEventListener("abort", onAbort);
     }
   }
 
@@ -577,7 +595,7 @@ class DynamicConfig {
    * diagnostic one — what a log line, a metric or an alert is built from:
    *
    * ```js
-   * for await (const event of config.events({ failurePollMs: 1000 })) {
+   * for await (const event of config.events()) {
    *   if (event.type === "reloadFailed" && event.consecutive > 3) {
    *     alert(`configuration refused at ${event.path}: ${event.kind}`)
    *   }
@@ -588,48 +606,70 @@ class DynamicConfig {
    * only — the same rule `explain()` and `check()` follow, and for the
    * same reason.
    *
-   * `failurePollMs` is what makes `reloadFailed` possible. An install
-   * wakes this stream; a refusal cannot, because a load that installed
-   * nothing bumps no generation and there is nothing to be notified of.
-   * So a stream that wants refusals asks for them and pays one `status()`
-   * read at the interval it names — nothing at all when it is omitted.
+   * A refusal wakes this stream natively: the engine's failure hook
+   * reaches the loop the same way an install's does, so `reloadFailed`
+   * arrives when the refusal happens — no timer, no polling, nothing to
+   * keep the process up. Delivery is latest-wins, like `changes()`:
+   * refusals with nothing awake in between arrive as one event carrying
+   * the current `consecutive` count, and a refusal followed by an
+   * install arrives as both events, refusal first, because that is the
+   * order they occurred in.
    *
    * @param {object} [options]
-   * @param {number} [options.failurePollMs] how often to look for a
-   *   refused reload. Omitted, the stream reports installs only.
+   * @param {AbortSignal} [options.signal] ends the iteration when it
+   *   aborts — a `return`, not an error, as a `break` would.
+   * @param {number} [options.failurePollMs] **deprecated, ignored** —
+   *   the interval refusals used to be polled at, before they could wake
+   *   anything. They can now; passing it changes nothing and warns once.
    */
-  async *events({ failurePollMs } = {}) {
+  async *events({ signal, failurePollMs } = {}) {
+    if (failurePollMs !== undefined) {
+      process.emitWarning(
+        "failurePollMs is ignored: a refused reload wakes events() natively now, and nothing is polled",
+        { type: "DeprecationWarning", code: "DYNAMIC_CONFIG_FAILURE_POLL" },
+      );
+    }
+
     let failures = this.status().consecutiveFailures;
     let previous = this.tryCurrent();
     let pending;
+    let refused = false;
     let wake;
-    let timer;
 
     const token = this.onReload((document) => {
       pending = document;
       wake?.();
     });
+    const failureToken = this.onReloadFailed(() => {
+      refused = true;
+      wake?.();
+    });
+    const onAbort = () => wake?.();
+
+    signal?.addEventListener("abort", onAbort, { once: true });
 
     try {
       for (;;) {
-        if (pending === undefined) {
+        if (signal?.aborted) {
+          return;
+        }
+
+        if (pending === undefined && !refused) {
           await new Promise((resolve) => {
             wake = resolve;
-
-            if (failurePollMs !== undefined) {
-              timer = setTimeout(resolve, failurePollMs);
-              // A stream must not be the reason a process stays up.
-              timer.unref?.();
-            }
           });
 
-          clearTimeout(timer);
           wake = undefined;
+        }
+
+        if (signal?.aborted) {
+          return;
         }
 
         const document = pending;
 
         pending = undefined;
+        refused = false;
 
         const status = this.status();
         const at = Date.now();
@@ -665,7 +705,8 @@ class DynamicConfig {
       }
     } finally {
       this.removeHook(token);
-      clearTimeout(timer);
+      this.removeFailureHook(failureToken);
+      signal?.removeEventListener("abort", onAbort);
     }
   }
 
@@ -720,9 +761,21 @@ class DynamicConfig {
    * @param {number} [options.pollMs] re-stat instead of subscribing, which
    *   is what a network or overlay filesystem needs — a container bind
    *   mount delivers no events.
+   * @param {AbortSignal} [options.signal] stops the watcher when it
+   *   aborts — the idiom the rest of Node uses for "until this says
+   *   stop", so a watcher can share the lifetime of a server or a test
+   *   without a matching `stopWatching()` call to forget.
    */
-  watch({ debounceMs, pollMs } = {}) {
+  watch({ debounceMs, pollMs, signal } = {}) {
     unwrap(this.#native.watch(debounceMs ?? null, pollMs ?? null));
+
+    if (signal !== undefined) {
+      if (signal.aborted) {
+        this.stopWatching();
+      } else {
+        signal.addEventListener("abort", () => this.stopWatching(), { once: true });
+      }
+    }
 
     return this;
   }
@@ -744,6 +797,29 @@ class DynamicConfig {
 
   removeHook(token) {
     return this.#native.removeHook(token);
+  }
+
+  /**
+   * The failure twin of `onReload`: called on the event loop after every
+   * reload that installs nothing, with no argument — what happened is
+   * `status()`'s to tell, and reading it there keeps values and error
+   * text out of the hook path.
+   *
+   * ```js
+   * config.onReloadFailed(() => {
+   *   const { consecutiveFailures, lastFailure } = config.status()
+   *   metrics.increment("config_reload_failed", { kind: lastFailure?.kind })
+   * })
+   * ```
+   *
+   * Returns the token `removeFailureHook` takes.
+   */
+  onReloadFailed(hook) {
+    return this.#native.onReloadFailed(hook);
+  }
+
+  removeFailureHook(token) {
+    return this.#native.removeFailureHook(token);
   }
 
   /**

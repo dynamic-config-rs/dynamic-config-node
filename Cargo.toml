@@ -49,3 +49,11 @@ codegen-units = 1
 strip = "symbols"
 
 # ── 0.7 TRAIN, DEVELOPMENT ONLY ─────────────────────────────────────────
+
+# DEV ONLY until dynamic-config 0.7.1 is on crates.io: the release train
+# publishes the engine first, then this block is DELETED — and the
+# version above raised to "0.7.1", which the failure hook needs — in the
+# same commit that releases the package. `cargo package` refuses patched
+# sources, so forgetting is not silent.
+[patch.crates-io]
+dynamic-config = { path = "../dynamic-config/dynamic-config" }

@@ -60,7 +60,7 @@ test("events reports every install, with the paths that moved", async () => {
   assert.ok(seen[0].at > 0);
 });
 
-test("events reports a refusal when it is asked to poll for one", async () => {
+test("events reports a refusal natively, with no poll interval", async () => {
   const { path, write } = workspace(document(1));
   const config = await new DynamicConfig({ key: "db", validate: database })
     .file(path)
@@ -68,7 +68,7 @@ test("events reports a refusal when it is asked to poll for one", async () => {
 
   const seen = [];
   const stream = (async () => {
-    for await (const event of config.events({ failurePollMs: 20 })) {
+    for await (const event of config.events()) {
       seen.push(event);
 
       if (seen.length === 3) {
@@ -98,6 +98,88 @@ test("events reports a refusal when it is asked to poll for one", async () => {
   );
   assert.equal(seen[1].kind, "invalid");
   assert.equal(seen[1].consecutive, 1);
+});
+
+test("failurePollMs is accepted, ignored, and warns once", async () => {
+  const { path, write } = workspace(document(1));
+  const config = await new DynamicConfig({ key: "db", validate: database })
+    .file(path)
+    .init();
+
+  const warnings = [];
+  const onWarning = (warning) => warnings.push(warning);
+  process.on("warning", onWarning);
+
+  try {
+    const seen = [];
+    const stream = (async () => {
+      for await (const event of config.events({ failurePollMs: 1000 })) {
+        seen.push(event);
+        break;
+      }
+    })();
+
+    await sleep(20);
+
+    write(document(2));
+    await config.reload();
+    await stream;
+
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0].type, "reloaded");
+
+    // `process.emitWarning` delivers on a later tick.
+    await sleep(20);
+    assert.ok(
+      warnings.some((warning) => warning.code === "DYNAMIC_CONFIG_FAILURE_POLL"),
+      "the deprecation surfaced",
+    );
+  } finally {
+    process.off("warning", onWarning);
+  }
+});
+
+test("an aborted signal ends changes() as a break would", async () => {
+  const { path, write } = workspace(document(1));
+  const config = await new DynamicConfig({ key: "db", validate: database })
+    .file(path)
+    .init();
+
+  const controller = new AbortController();
+  const seen = [];
+  const stream = (async () => {
+    for await (const doc of config.changes({ signal: controller.signal })) {
+      seen.push(doc);
+    }
+
+    return "ended";
+  })();
+
+  await sleep(20);
+
+  write(document(2));
+  await config.reload();
+  await sleep(20);
+
+  controller.abort();
+
+  assert.equal(await stream, "ended", "a return, not an error");
+  assert.equal(seen.length, 1);
+});
+
+test("an already-aborted signal yields nothing from events()", async () => {
+  const { path } = workspace(document(1));
+  const config = await new DynamicConfig({ key: "db", validate: database })
+    .file(path)
+    .init();
+
+  const seen = [];
+
+  for await (const event of config.events({ signal: AbortSignal.abort() })) {
+    seen.push(event);
+  }
+
+  assert.equal(seen.length, 0);
 });
 
 test("no event carries a value", async () => {
