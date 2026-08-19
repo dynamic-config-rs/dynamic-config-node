@@ -4,8 +4,8 @@
 
 **Hot-reloadable configuration for Node.js: Rust resolves, your schema validates.**
 
-[![CI](https://github.com/dynamic-config-rs/dynamic-config-node/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dynamic-config-rs/dynamic-config-node/actions/workflows/ci.yml)
-[![Security](https://github.com/dynamic-config-rs/dynamic-config-node/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/dynamic-config-rs/dynamic-config-node/actions/workflows/security.yml)
+[![CI](https://github.com/dynamic-config-rs/dynamic-config-node/actions/workflows/ci.yml/badge.svg?event=pull_request)](https://github.com/dynamic-config-rs/dynamic-config-node/actions/workflows/ci.yml)
+[![Security](https://github.com/dynamic-config-rs/dynamic-config-node/actions/workflows/security.yml/badge.svg?event=pull_request)](https://github.com/dynamic-config-rs/dynamic-config-node/actions/workflows/security.yml)
 [![npm](https://img.shields.io/npm/v/dynamic-config-node.svg)](https://www.npmjs.com/package/dynamic-config-node)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 

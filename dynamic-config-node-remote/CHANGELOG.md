@@ -12,6 +12,12 @@ base package, and a gap between them is a pair nobody built.
 
 ### Changed
 
+- **Built on the 0.8 store crates and engine 0.8** — the same
+  build-time bump as the base package, with the JavaScript surface
+  unchanged. The development-only `[patch.crates-io]` block is gone.
+
+### Changed
+
 - **The single 1,651-line module is five.** `lib.rs` keeps the front
   door; the off-loop task machinery, the TLS options object, the watch
   handle and the eight store classes each have a file. Nothing public

@@ -1,14 +1,11 @@
 name: CI
 
-# No push trigger for `dev`: everything on dev travels through a pull
-# request anyway, and a push run would twin the PR run on the same commit —
-# under *required* checks, a deduplicating cancellation poisons the gate
-# (a cancelled twin's "CI is green" reads as failure and blocks the merge).
-# `main` keeps its push trigger because a rebase-merge mints a new SHA that
-# no PR run ever checked.
+# No push trigger at all: everything travels through a pull request, and
+# main only ever receives a SQUASH of a green PR — the squashed tree is
+# byte-identical to the PR head the checks already ran on, so a main
+# re-run would test the same content twice. Merging runs release.yml
+# alone; workflow_dispatch stays as the manual escape hatch.
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 

@@ -12,6 +12,14 @@ release has nothing in it for a Node user.
 
 ## [Unreleased]
 
+### Changed
+
+- **Built on engine 0.8.** The engine's breaking release (a `LoadSpec`
+  field, MSRV 1.88) is a build-time fact here — the platform binaries
+  embed it statically and the JavaScript surface is unchanged. The
+  development-only `[patch.crates-io]` block is gone: the packages
+  build from exactly what crates.io serves.
+
 ### Added
 
 - **`onReloadFailed(hook)` / `removeFailureHook(token)`.** The failure

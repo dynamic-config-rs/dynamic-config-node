@@ -1006,7 +1006,9 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "dynamic-config"
-version = "0.7.0"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "583c63e4677f90e11d393fd86450c6e02cdd5b24bcf823f9591afa39eedce8c3"
 dependencies = [
  "arc-swap",
  "dynamic-config-macros",
@@ -1022,9 +1024,9 @@ dependencies = [
 
 [[package]]
 name = "dynamic-config-consul"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6aa5075daa9b3ad2742520d683930421f1b0b47092412ff8b1a6be8631e5502a"
+checksum = "e11823ded0b8a11400a788f8ce238938d8a15b186af38110c276b7fc50ad5fad"
 dependencies = [
  "base64 0.23.1",
  "dynamic-config",
@@ -1035,9 +1037,9 @@ dependencies = [
 
 [[package]]
 name = "dynamic-config-etcd"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e702f764ae212e52ee1524f737224fa9f88c4628404e23e2f237af5ca556c9a"
+checksum = "0863e16e125192bffe5fe99dd4575d43f9a8ae8c803096b263de8e80f6d5be01"
 dependencies = [
  "dynamic-config",
  "dynamic-config-store-core",
@@ -1047,9 +1049,9 @@ dependencies = [
 
 [[package]]
 name = "dynamic-config-firestore"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "952204f3d8bee319a42be759fdc06fc56c8afa90cfc74504dc3efdd506e2a824"
+checksum = "474e53b14085e7ec5ec4da6c7473ba9ca79fe82df2171f2e0206215932292c00"
 dependencies = [
  "dynamic-config",
  "dynamic-config-store-core",
@@ -1059,9 +1061,9 @@ dependencies = [
 
 [[package]]
 name = "dynamic-config-git"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93aff8de36d5af90bee33ef0989327f702b4450b9ca480d014ea89c532b298b0"
+checksum = "b2d7e51a28df5e04dfbe2287bd540cff089b62801c93ec428e4c1c7deff9950b"
 dependencies = [
  "dynamic-config",
  "dynamic-config-store-core",
@@ -1071,7 +1073,9 @@ dependencies = [
 
 [[package]]
 name = "dynamic-config-macros"
-version = "0.7.0"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4914a2922931028329295898184036a863248e014f5fbeca861efc9e15aca395"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -1081,9 +1085,9 @@ dependencies = [
 
 [[package]]
 name = "dynamic-config-nats"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7c6ea6f768c8959e5c63a01d36a960aafabebeeef37b972861acdd66d39c55a"
+checksum = "3b9ff7396c936480c40fc006ec2cee34ab0f074cddfe1adc3cf1538d9a84bd4e"
 dependencies = [
  "async-nats",
  "dynamic-config",
@@ -1126,9 +1130,9 @@ dependencies = [
 
 [[package]]
 name = "dynamic-config-redis"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b14d6966377d382c531e20cb038a4612dfe11fd058218a790a8ec50b3c5fcb0"
+checksum = "f5232459dd1763435e5fa1f07ebe7b6d7a98d754cd58cb5b13cf350ebaa2125e"
 dependencies = [
  "dynamic-config",
  "dynamic-config-store-core",
@@ -1137,9 +1141,9 @@ dependencies = [
 
 [[package]]
 name = "dynamic-config-s3"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ba7a0174d6b3530132a9b5a9e784bc7890bde6485bb8189da425032d01cc648"
+checksum = "f6a884d66ac17194af478492e18d3427a6eb6934c91d0901fd86f9c79fbc91ea"
 dependencies = [
  "aws-config",
  "aws-sdk-s3",
@@ -1152,18 +1156,18 @@ dependencies = [
 
 [[package]]
 name = "dynamic-config-store-core"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3fb3568d62ec661bb9f74ad1603ba4b696b7a501c324b1ba677aeae5b4dfb2c"
+checksum = "b803ed1de57336bebd49a4559b4b70f5718df84265fa42763b6790bf1f83e50e"
 dependencies = [
  "dynamic-config",
 ]
 
 [[package]]
 name = "dynamic-config-vault"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48aae6195afd0c7cda3335da3e72e0f593ec01b0f087cea55f43a27d531b7f10"
+checksum = "d9c816d3f4afb7f8ddca1389f44b6a361d323114ebc96425b5f495fd16b99117"
 dependencies = [
  "dynamic-config",
  "dynamic-config-store-core",
@@ -2270,9 +2274,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.4.16"
+version = "0.4.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9f37a958b41b3b19ee2707c06439c0e9e547e847223eb791ecb0cb821c65e27"
+checksum = "9f877e75f39e9827ec50a572dd592684ac28c029578726c85f1b2aa6ab807449"
 dependencies = [
  "atomic-waker",
  "bytes",

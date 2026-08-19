@@ -7,8 +7,6 @@ name: Security
 # No push trigger for `dev` — same reasoning as ci.yml: dev travels through
 # pull requests, and a push twin under required checks poisons the gate.
 on:
-  push:
-    branches: [main]
   pull_request:
   schedule:
     - cron: "17 6 * * 1"
