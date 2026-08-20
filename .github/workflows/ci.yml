@@ -35,7 +35,7 @@ jobs:
       # The engine's conformance cases, at a PINNED ref — see the python
       # repository's twin job for the reasoning.
       - run: |
-          ref="v0.7.1"
+          ref="v0.8.0"
           curl -sSL "https://github.com/dynamic-config-rs/dynamic-config/archive/refs/tags/${ref}.tar.gz" \
             | tar -xz --strip-components=1 --wildcards '*/conformance/'
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v5

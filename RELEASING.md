@@ -58,18 +58,20 @@ optional dependencies are not there yet is an install that fails.
 
 ## What an operator has to have ready
 
-**No token.** The publish job authenticates through npm's Trusted
-Publishing: npm verifies the workflow's OIDC identity and mints the
-credential per run — nothing stored, nothing expiring on a 90-day
-clock, nothing to leak. What has to exist instead is the one-time
-console entry per package (npmjs.com → package → Settings → *Trusted
-publisher*): repository `dynamic-config-rs/dynamic-config-node`,
-workflow `release.yml` — for the wrapper, the remote wrapper, and
-every platform package the release ships. OUTSTANDING.md carries the
-exact roster. `--provenance` rides the same `id-token: write` the job
-declares.
+**`NPM_TOKEN`, for now.** The publish job reads it as
+`NODE_AUTH_TOKEN`; an automation token with publish rights on the
+twelve packages is what a release needs today. `--provenance` still
+rides the job's `id-token: write`, so every package records which
+workflow at which commit built it.
 
-A leftover `NPM_TOKEN` secret is inert and should be revoked.
+**The token is temporary.** Trusted Publishing replaces it the moment
+the console entries exist — one per package (npmjs.com → package →
+Settings → *Trusted publisher*): repository
+`dynamic-config-rs/dynamic-config-node`, workflow `release.yml`, for
+the wrapper, the remote wrapper, and every platform package.
+OUTSTANDING.md carries the exact roster. Then delete the
+`NODE_AUTH_TOKEN` env from the publish step and revoke the secret;
+nothing else in the flow changes.
 
 ## When a publish fails halfway
 
