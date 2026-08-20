@@ -8,6 +8,8 @@ base package, and a gap between them is a pair nobody built.
 
 ## [Unreleased]
 
+## 0.0.5 — 2026-08-20
+
 ## 0.0.4 — 2026-08-18
 
 ### Changed

@@ -12,6 +12,8 @@ release has nothing in it for a Node user.
 
 ## [Unreleased]
 
+## 0.0.5 — 2026-08-20
+
 ### Changed
 
 - **Built on engine 0.8.** The engine's breaking release (a `LoadSpec`
