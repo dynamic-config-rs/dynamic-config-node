@@ -8,7 +8,15 @@ base package, and a gap between them is a pair nobody built.
 
 ## [Unreleased]
 
+## 0.0.5 — 2026-08-20
+
 ## 0.0.4 — 2026-08-18
+
+### Changed
+
+- **Built on the 0.8 store crates and engine 0.8** — the same
+  build-time bump as the base package, with the JavaScript surface
+  unchanged. The development-only `[patch.crates-io]` block is gone.
 
 ### Changed
 

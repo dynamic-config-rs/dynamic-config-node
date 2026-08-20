@@ -1,14 +1,11 @@
 name: CI
 
-# No push trigger for `dev`: everything on dev travels through a pull
-# request anyway, and a push run would twin the PR run on the same commit —
-# under *required* checks, a deduplicating cancellation poisons the gate
-# (a cancelled twin's "CI is green" reads as failure and blocks the merge).
-# `main` keeps its push trigger because a rebase-merge mints a new SHA that
-# no PR run ever checked.
+# No push trigger at all: everything travels through a pull request, and
+# main only ever receives a SQUASH of a green PR — the squashed tree is
+# byte-identical to the PR head the checks already ran on, so a main
+# re-run would test the same content twice. Merging runs release.yml
+# alone; workflow_dispatch stays as the manual escape hatch.
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -29,6 +26,27 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  conformance:
+    name: the three languages agree
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # The engine's conformance cases, at a PINNED ref — see the python
+      # repository's twin job for the reasoning.
+      - run: |
+          ref="v0.8.0"
+          curl -sSL "https://github.com/dynamic-config-rs/dynamic-config/archive/refs/tags/${ref}.tar.gz" \
+            | tar -xz --strip-components=1 --wildcards '*/conformance/'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v5
+        with:
+          node-version: "22"
+      - run: npm install --no-save --no-fund --no-audit dynamic-config-node
+      - run: >-
+          CONFORMANCE_DIR=conformance/cases
+          CONFORMANCE_PACKAGE=dynamic-config-node
+          node scripts/conformance.mjs
+
   # What changed, so the expensive jobs below can sit out a run that cannot
   # affect them. Deliberately a *job* rather than `on.pull_request.paths`:
   # a workflow filtered out at the trigger never reports at all, and a
@@ -241,17 +259,13 @@ jobs:
       - run: cargo generate-lockfile
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
-          toolchain: "1.85"
+          toolchain: "1.88"
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           shared-key: msrv
-      # `--lib`: the addon has no test targets on the Rust side, and dev
-      # dependencies track stable.
-      - run: cargo +1.85 check -p dynamic-config-node --locked --lib
-      # The stores pull heavier trees; their floor is higher and its own.
-      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
-        with:
-          toolchain: "1.88"
+      # One floor since the 1.88 raise. `--lib`: the addons have no test
+      # targets on the Rust side, and dev dependencies track stable.
+      - run: cargo +1.88 check -p dynamic-config-node --locked --lib
       - run: cargo +1.88 check -p dynamic-config-node-remote --locked --lib
 
   docs:
@@ -336,6 +350,7 @@ jobs:
       - docs
       - docs-links
       - actionlint
+      - conformance
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

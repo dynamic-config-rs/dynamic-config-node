@@ -39,6 +39,7 @@ async function drain(check, ms = 5000) {
 // notes. Skipping is honest; a green that never ran is not.
 const macDelivery =
   process.platform === "darwin" &&
+  process.env.DYNAMIC_CONFIG_MAC_LOGGER_GATE !== "1" &&
   "setLogger delivery is unverified on macOS CI; see OUTSTANDING";
 
 test("a handler receives the reload line, on the loop", { skip: macDelivery }, async () => {

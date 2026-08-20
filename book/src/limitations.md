@@ -41,21 +41,17 @@ and hands the engine the document that came back — not that the engine
 learned to await. A store the engine reaches on its own schedule would
 still have to be synchronous, which is why fetching stays explicit.
 
-## A refused reload cannot wake anything
+## A `changes()` loop sleeps through a refusal — by design
 
-The engine bumps a generation when a document *installs*. A load that
-installed nothing does not, so nothing can be notified of it: `events()`
-reports `reloadFailed` only when it is given a `failurePollMs` interval to
-check `status()` at, and a `changes()` loop sleeps through a refusal
-entirely.
-
-That is a real gap for one case — a watcher reloading a file somebody has
-just broken, where the next install is exactly the thing that is not
-coming. `failurePollMs: 1000` costs one status read a second and closes
-it; a health endpoint reading `status().consecutiveFailures` closes it
-with no stream at all. Closing it properly means a second wake channel in
-the engine, which is a change to `dynamic-config` rather than to this
-binding — and the Python binding carries the same note.
+A refused reload wakes `events()` and `onReloadFailed` natively (since
+engine 0.7.1, which grew the second wake channel this section used to
+ask for). What it still does not wake is `changes()`: that stream yields
+*documents*, a refusal installs none, and a service loop resized around
+`undefined` would be worse than one that slept. The split is the
+contract — `changes()` for the values, `events()` for the diagnosis —
+and the [engine book's Change Notification
+page](https://dynamic-config-rs.github.io/change-notification.html)
+holds it for all three languages.
 
 ## Encrypted files are not exposed
 

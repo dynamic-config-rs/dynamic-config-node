@@ -23,21 +23,21 @@ authors = ["Cevat Batuhan Tolon <cevatbatuhan.tolon@gmail.com>"]
 # The engine. `default-features = false` because each crate names what it
 # needs — the addon carries every feature a Node caller can reach, the
 # stores package carries only what a document needs to travel.
-dynamic-config = { version = "0.7", default-features = false }
+dynamic-config = { version = "0.8", default-features = false }
 # The store crates' shared internals: the redaction that keeps a password
 # out of a store's description, by the same rule the store crates use
 # rather than by a second copy of it.
-dynamic-config-store-core = "0.7"
+dynamic-config-store-core = "0.8"
 # The eight stores. Caret, because an addon built today should be able to
 # pick up a store's patch release without this repository being re-cut.
-dynamic-config-consul = "0.7"
-dynamic-config-etcd = { version = "0.7", features = ["tls"] }
-dynamic-config-firestore = "0.7"
-dynamic-config-git = "0.7"
-dynamic-config-nats = "0.7"
-dynamic-config-redis = { version = "0.7", features = ["tls"] }
-dynamic-config-s3 = "0.7"
-dynamic-config-vault = "0.7"
+dynamic-config-consul = "0.8"
+dynamic-config-etcd = { version = "0.8", features = ["tls"] }
+dynamic-config-firestore = "0.8"
+dynamic-config-git = "0.8"
+dynamic-config-nats = "0.8"
+dynamic-config-redis = { version = "0.8", features = ["tls"] }
+dynamic-config-s3 = "0.8"
+dynamic-config-vault = "0.8"
 
 # The addon is what ships, and it ships prebuilt: one binary per platform,
 # downloaded rather than compiled by whoever runs `npm install`. So the
@@ -48,4 +48,3 @@ lto = "thin"
 codegen-units = 1
 strip = "symbols"
 
-# ── 0.7 TRAIN, DEVELOPMENT ONLY ─────────────────────────────────────────

@@ -62,7 +62,7 @@ All four take effect on the next load.
 | `get(path, fallback?)` | one value by dotted path |
 | `replace(document)` | installs a document directly, without loading: the testing door. `status()` and `snapshot()` still describe the last real load |
 | `changes()` | an async iterator of every installed document |
-| `events({ failurePollMs })` | an async iterator of `reloaded` and `reloadFailed` events. No event carries a value |
+| `events()` | an async iterator of `reloaded` and `reloadFailed` events — refusals wake it natively. No event carries a value |
 | `await running(body, options?)` | load, watch, run `body`, stop — the whole lifetime as one call, answering what `body` answered |
 | `generation` | how many documents have been installed |
 

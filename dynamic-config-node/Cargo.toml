@@ -6,7 +6,7 @@ name = "dynamic-config-node"
 version = "0.0.1"
 edition.workspace = true
 # napi 3 needs more than the core's 1.71.
-rust-version = "1.85"
+rust-version = "1.88"
 license.workspace = true
 description = "Node.js bindings for dynamic-config: Rust resolves, your schema validates"
 repository.workspace = true

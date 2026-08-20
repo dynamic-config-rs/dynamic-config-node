@@ -4,8 +4,8 @@
 
 **Hot-reloadable configuration for Node.js: Rust resolves, your schema validates.**
 
-[![CI](https://github.com/dynamic-config-rs/dynamic-config-node/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dynamic-config-rs/dynamic-config-node/actions/workflows/ci.yml)
-[![Security](https://github.com/dynamic-config-rs/dynamic-config-node/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/dynamic-config-rs/dynamic-config-node/actions/workflows/security.yml)
+[![CI](https://github.com/dynamic-config-rs/dynamic-config-node/actions/workflows/ci.yml/badge.svg?event=pull_request)](https://github.com/dynamic-config-rs/dynamic-config-node/actions/workflows/ci.yml)
+[![Security](https://github.com/dynamic-config-rs/dynamic-config-node/actions/workflows/security.yml/badge.svg?event=pull_request)](https://github.com/dynamic-config-rs/dynamic-config-node/actions/workflows/security.yml)
 [![npm](https://img.shields.io/npm/v/dynamic-config-node.svg)](https://www.npmjs.com/package/dynamic-config-node)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -64,7 +64,7 @@ uploaded.
 
 ## The engine is a dependency, not a sibling
 
-These crates name it with a caret (`dynamic-config = "0.6"`), so an engine
+These crates name it with a caret (`dynamic-config = "0.7"`), so an engine
 patch release reaches them with no release here. The packages version on
 their own schedule.
 
@@ -74,7 +74,7 @@ their own schedule.
 |---|---|
 | Node.js | 18, 20, 22, 24 — tested on each |
 | ABI | Node-API 6; the addon is not rebuilt per Node release |
-| MSRV (to build from source) | 1.85 — 1.88 for the stores package |
+| MSRV (to build from source) | 1.88, both packages |
 
 Raising either floor is a breaking change.
 
@@ -83,6 +83,8 @@ Raising either floor is a breaking change.
 [CONTRIBUTING.md](CONTRIBUTING.md). `just check` needs Node 18+ and
 nothing else; TypeScript is optional and the gate says so when it is
 absent.
+
+What you may build on and find unchanged tomorrow is written down: the [Compatibility Contract](https://dynamic-config-rs.github.io/compatibility.html).
 
 ## License
 

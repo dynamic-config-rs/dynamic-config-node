@@ -164,9 +164,13 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-      # Provenance: npm records *which workflow, at which commit* built the
-      # package, and a consumer can verify it. It costs one permission and
-      # is the whole reason this job is not `npm publish` on a laptop.
+      # `--provenance` still records which workflow at which commit built
+      # each package, and that alone needs OIDC. The publish CREDENTIAL
+      # is `NPM_TOKEN` for now: the twelve Trusted Publisher console
+      # entries (OUTSTANDING.md names the roster) are not in place yet,
+      # and a release that waits on a console is a release that does not
+      # ship. When they exist, delete the `NODE_AUTH_TOKEN` env below
+      # and the token becomes revocable — nothing else changes.
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -174,6 +178,9 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
+      # A recent npm: `--provenance` wants one, and trusted publishing
+      # will want ≥ 11.5 the day the console entries land.
+      - run: npm install -g npm@latest && npm --version
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: addon-*

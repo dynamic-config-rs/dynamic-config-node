@@ -9,6 +9,13 @@ the watcher's own thread, so the program is not structured around
 watching — and the new document is installed only if the schema accepts
 it.
 
+The delivery semantics — edge-triggered, latest-wins, what a refused
+reload does and does not wake — are one contract across Rust, Python
+and Node, written once in the engine book's
+[Change Notification](https://dynamic-config-rs.github.io/change-notification.html)
+page. What follows is the Node surface of it, including the
+`latest | serial | every` backpressure vocabulary that page uses.
+
 ## A rejected edit changes nothing
 
 This is the property the whole design is for, and it holds identically for
@@ -93,7 +100,7 @@ hook is not the place to end a process.
 one a log line, a metric or an alert is built from:
 
 ```ts
-for await (const event of config.events({ failurePollMs: 1_000 })) {
+for await (const event of config.events()) {
   if (event.type === "reloadFailed" && event.consecutive > 3) {
     alert(`configuration refused at ${event.path}: ${event.kind}`)
   } else if (event.type === "reloaded") {
@@ -107,11 +114,39 @@ the same rule `explain()` and `check()` follow, and for the same reason: a
 value in an event is a secret in a log. `changedPaths(before, after)` is
 the same comparison, exported for the code that wants to make it itself.
 
-`failurePollMs` is what makes `reloadFailed` possible. An install wakes
-the stream; a refusal cannot, because a load that installed nothing bumps
-no generation and there is nothing to be notified of. So a stream that
-wants refusals asks for them and pays one `status()` read at the interval
-it names — and starts no timer at all when it is omitted.
+A refusal wakes the stream natively: the engine's failure hook reaches
+the event loop the same way an install's does, so `reloadFailed` arrives
+when the refusal happens — no timer, no polling. Delivery is
+latest-wins: refusals with nothing awake in between arrive as one event
+carrying the current `consecutive` count, and a refusal followed by an
+install arrives as both events, refusal first. (`failurePollMs`, the
+interval refusals were polled at before they could wake anything, is
+accepted, ignored, and warns once.) `onReloadFailed(hook)` is the
+callback twin, handed nothing — read `status()` for what happened.
+
+## Lifetimes are signals
+
+Everything here that runs "until told otherwise" takes an
+`AbortSignal`, because that is how Node spells lifetimes:
+
+```ts
+const controller = new AbortController()
+
+config.watch({ signal: controller.signal })
+
+for await (const document of config.changes({ signal: controller.signal })) {
+  await pool.resize(document.pool.maxSize)
+}
+
+// Later — one call ends the watcher and the stream together.
+controller.abort()
+```
+
+An abort ends a `changes()` or `events()` iteration the way a `break`
+would — a `return`, not an error — and stops a watcher the way
+`stopWatching()` does. A server's shutdown signal, a test's cleanup, a
+request's timeout: whatever owns the lifetime owns the streams tied to
+it, with nothing to forget.
 
 ## Polling, for filesystems that do not notify
 

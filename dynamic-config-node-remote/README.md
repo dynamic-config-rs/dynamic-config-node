@@ -131,3 +131,20 @@ one fewer thread, and it is a line you can read.
 A store watch hands you a **document**; `useStore` is what puts one into a
 configuration. Keeping those apart is what lets a caller log a change, or
 refuse it, without the engine having already acted on it.
+
+## Examples
+
+Four runnable files under [`examples/`](examples/), each of which says
+so and carries on when the server is not there:
+
+| File | Shows |
+|---|---|
+| [`01-redis.mjs`](examples/01-redis.mjs) | fetch, refresh, and the push loop (keyspace notifications) |
+| [`02-etcd.mjs`](examples/02-etcd.mjs) | several keys merged into one document; auth as arguments |
+| [`03-vault.mjs`](examples/03-vault.mjs) | `tokenFn` — a credential that is a function because it rotates |
+| [`04-compose.mjs`](examples/04-compose.mjs) | a file for the shape, a store for what moves, `explain()` saying which won |
+
+The other stores' idioms are the same shapes with a different
+constructor; the [Python remote examples](https://github.com/dynamic-config-rs/dynamic-config-python/tree/main/dynamic-config-python-remote/examples)
+walk all eight (Consul, NATS, S3, Firestore, git, and a private-CA TLS
+setup) and each maps one-to-one onto the classes here.

@@ -58,16 +58,20 @@ optional dependencies are not there yet is an install that fails.
 
 ## What an operator has to have ready
 
-`NPM_TOKEN` as a repository secret — a **granular access token** with
-*read and write* on all packages and **bypass 2FA** enabled. Classic
-tokens no longer exist, and a token without the 2FA bypass answers
-`403 Two-factor authentication or granular access token with bypass 2fa
-enabled is required` on the first publish. Write tokens expire after 90
-days at most, so this is a recurring errand rather than a one-off.
+**`NPM_TOKEN`, for now.** The publish job reads it as
+`NODE_AUTH_TOKEN`; an automation token with publish rights on the
+twelve packages is what a release needs today. `--provenance` still
+rides the job's `id-token: write`, so every package records which
+workflow at which commit built it.
 
-Nothing else: the packages are unscoped, so no organisation is involved,
-and `--provenance` needs only the `id-token: write` the job already
-declares.
+**The token is temporary.** Trusted Publishing replaces it the moment
+the console entries exist — one per package (npmjs.com → package →
+Settings → *Trusted publisher*): repository
+`dynamic-config-rs/dynamic-config-node`, workflow `release.yml`, for
+the wrapper, the remote wrapper, and every platform package.
+OUTSTANDING.md carries the exact roster. Then delete the
+`NODE_AUTH_TOKEN` env from the publish step and revoke the secret;
+nothing else in the flow changes.
 
 ## When a publish fails halfway
 
