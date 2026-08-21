@@ -1,7 +1,7 @@
 {
   "//": "`dynamic-config` on npm is an unrelated package by another author. This distribution takes the qualified name, exactly as `dynamic-config-py` does on PyPI, and the import is the package name.",
   "name": "dynamic-config-node",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Hot-reloadable configuration for Node.js: Rust resolves, your schema validates",
   "keywords": [
     "config",

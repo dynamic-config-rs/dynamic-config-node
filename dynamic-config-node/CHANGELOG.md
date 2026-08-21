@@ -12,6 +12,8 @@ release has nothing in it for a Node user.
 
 ## [Unreleased]
 
+## 0.0.6 — 2026-08-21
+
 ### Changed
 
 - **Built on engine 0.9.** The engine's breaking release — resolution is

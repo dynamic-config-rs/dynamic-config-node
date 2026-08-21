@@ -8,6 +8,8 @@ base package, and a gap between them is a pair nobody built.
 
 ## [Unreleased]
 
+## 0.0.6 — 2026-08-21
+
 ### Changed
 
 - **Built on engine 0.9.** The engine's breaking release — resolution is
