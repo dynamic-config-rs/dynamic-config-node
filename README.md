@@ -64,8 +64,8 @@ uploaded.
 
 ## The engine is a dependency, not a sibling
 
-These crates name it with a caret (`dynamic-config = "0.7"`), so an engine
-patch release reaches them with no release here. The packages version on
+These crates name it with a caret, so an engine patch release reaches
+them with no release here. The packages version on
 their own schedule.
 
 ## Supported runtimes
