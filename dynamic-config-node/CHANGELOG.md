@@ -12,6 +12,8 @@ release has nothing in it for a Node user.
 
 ## [Unreleased]
 
+## 0.0.7 — 2026-08-23
+
 ### Added
 
 - **`"absent"` is an error kind.** A store that answers "that path holds
