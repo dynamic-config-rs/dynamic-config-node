@@ -117,7 +117,7 @@ Thrown by every call that can fail.
 
 | Field | |
 |---|---|
-| `kind` | `"io"`, `"parse"`, `"missing"`, `"type"`, `"env"`, `"invalid"`, `"remote"`, `"auth"`, `"decrypt"`, `"backend"` |
+| `kind` | `"io"`, `"parse"`, `"missing"`, `"type"`, `"env"`, `"invalid"`, `"remote"`, `"auth"`, `"absent"`, `"decrypt"`, `"backend"` |
 | `path` | the dotted key path, or `""` when the failure is the load's |
 | `originKind` | `"file"`, `"env"`, `"inline"`, `"remote"`, `"runtime"`, `"unknown"` |
 | `origin` | the file, the variable, the store — whatever `originKind` names |

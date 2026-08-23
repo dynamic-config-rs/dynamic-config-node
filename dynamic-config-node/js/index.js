@@ -58,8 +58,8 @@ const native = addon();
  *
  * `kind` is the same word the Rust `ErrorKind` and the Python exception
  * hierarchy use — `io`, `parse`, `missing`, `type`, `env`, `invalid`,
- * `remote`, `auth`, `decrypt`, `backend` — so the same condition is called
- * the same thing in all three languages.
+ * `remote`, `auth`, `absent`, `decrypt`, `backend` — so the same condition
+ * is called the same thing in all three languages.
  */
 class DynamicConfigError extends Error {
   constructor({ kind, path, originKind, origin, message }) {
@@ -1066,6 +1066,10 @@ class DynamicConfig {
   /** The document, the generation, and how old it is. */
   snapshot() {
     return unwrap(this.#native.snapshot());
+  }
+
+  fingerprint() {
+    return unwrap(this.#native.fingerprint());
   }
 
   /** Reloads, failures and the last one, for a health endpoint. */

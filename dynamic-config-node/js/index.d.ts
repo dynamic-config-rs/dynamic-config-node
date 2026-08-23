@@ -19,6 +19,7 @@ export type ErrorKind =
   | "invalid"
   | "remote"
   | "auth"
+  | "absent"
   | "decrypt"
   | "backend";
 
@@ -387,6 +388,23 @@ export class DynamicConfig<T = unknown> {
   check(): Report;
   snapshot(): Snapshot<T> | null;
   status(): Status;
+
+  /**
+   * A stable digest of the configuration installed, or `null` before the
+   * first load.
+   *
+   * `sha256:…`, over the resolved tree rather than any rendering of it, so
+   * two processes agree whether their files were written as TOML or as
+   * YAML. **Safe to log**: every field named to `secrets` is masked by
+   * position before hashing, so the digest moves when a secret appears or
+   * disappears and stays put when one merely rotates — a digest that moved
+   * on rotation would be an oracle for the value that moved it.
+   *
+   * For comparing two processes without comparing two documents:
+   * `status().generation` counts this process's installs and cannot answer
+   * that.
+   */
+  fingerprint(): string | null;
 
   /** Pins values for the duration of `body`, and puts them back after. */
   overrides<R>(values: Record<string, unknown>, body: () => R | Promise<R>): Promise<R>;

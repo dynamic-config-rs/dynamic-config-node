@@ -1160,6 +1160,38 @@ impl Config {
             .take();
     }
 
+    /// A stable digest of the configuration installed, or `null` before
+    /// the first load.
+    ///
+    /// `sha256:…`, over the resolved tree rather than any rendering of it,
+    /// so two processes agree whether their files were written as TOML or
+    /// as YAML. **Safe to log**: every field named to `secrets` is masked
+    /// by position before hashing, so the digest moves when a secret
+    /// appears or disappears and stays put when one merely rotates — a
+    /// digest that moved on rotation would be an oracle for the value that
+    /// moved it.
+    ///
+    /// For comparing two processes without comparing two documents.
+    /// `status().generation` counts *this* process's installs and cannot
+    /// answer that.
+    #[napi]
+    pub fn fingerprint(&self) -> Value {
+        let engine = self
+            .inner
+            .engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let Engine::Ready(dynamic) = &*engine else {
+            return outcome::ok(Value::Null);
+        };
+
+        outcome::ok(match dynamic.fingerprint() {
+            Some(fingerprint) => json!(*fingerprint),
+            None => Value::Null,
+        })
+    }
+
     /// Everything the engine knows about the running document, as data.
     #[napi]
     pub fn snapshot(&self) -> Value {

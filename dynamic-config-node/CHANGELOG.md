@@ -12,6 +12,29 @@ release has nothing in it for a Node user.
 
 ## [Unreleased]
 
+## 0.0.7 — 2026-08-23
+
+### Added
+
+- **`"absent"` is an error kind.** A store that answers "that path holds
+  nothing" is now told apart from one that does not answer: waiting cures an
+  outage and does not bring back a deleted key. `ErrorKind` gained the
+  member, so a TypeScript `switch` over it covers the new case.
+- **`fingerprint()`** — a stable digest of the configuration installed, or
+  `null` before the first load. `sha256:…`, over the resolved tree rather
+  than any rendering of it, so two processes agree whether their files were
+  written as TOML or as YAML.
+
+  **Safe to log**: every field named to `secrets` is masked by position
+  before hashing, so it moves when a secret appears or disappears and stays
+  put when one merely rotates. It answers what `status().generation`
+  cannot: two processes on generation 4 have nothing in particular in
+  common.
+
+### Changed
+
+- The engine and the nine store crates move to **0.10**.
+
 ## 0.0.6 — 2026-08-21
 
 ### Changed
