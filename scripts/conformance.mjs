@@ -37,7 +37,10 @@ async function runCase(dir) {
   for (const [key, value] of Object.entries(env)) process.env[key] = value;
 
   try {
-    let config = new DynamicConfig({ key: args.key }).file(join(dir, "config.toml"));
+    let config = new DynamicConfig({
+      key: args.key,
+      secrets: args.secrets ?? [],
+    }).file(join(dir, "config.toml"));
 
     if (args.env_prefix) config = config.env(args.env_prefix);
     if (args.profile_env) config = config.profileEnv(args.profile_env);
@@ -56,7 +59,13 @@ async function runCase(dir) {
 
     await config.init();
 
-    return { resolved: config.current() };
+    // Only where a case pins one: every other case is a document
+    // comparison, and asking for a digest it does not check would make
+    // this runner test the binding rather than the suite.
+    return {
+      resolved: config.current(),
+      fingerprint: args.expected_fingerprint ? config.fingerprint() : null,
+    };
   } finally {
     for (const key of Object.keys(env)) delete process.env[key];
   }
@@ -74,12 +83,21 @@ if (!cases.length || !existsSync(root)) {
 }
 
 for (const name of cases) {
-  const { resolved } = await runCase(join(root, name));
+  const { resolved, fingerprint } = await runCase(join(root, name));
   const expected = JSON.parse(readFileSync(join(root, name, "expected.json"), "utf8"));
   const a = JSON.stringify(sort(resolved));
   const b = JSON.stringify(sort(expected));
 
-  if (a !== b) failures.push(`${name}: resolved ${a} but expected ${b}`);
+  if (a !== b) {
+    failures.push(`${name}: resolved ${a} but expected ${b}`);
+    continue;
+  }
+
+  const pinned = JSON.parse(readFileSync(join(root, name, "args.json"), "utf8"))
+    .expected_fingerprint;
+
+  if (pinned && fingerprint !== pinned)
+    failures.push(`${name}: fingerprinted ${fingerprint} but expected ${pinned}`);
 }
 
 function sort(value) {
