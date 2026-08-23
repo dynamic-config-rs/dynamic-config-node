@@ -61,6 +61,6 @@
     "build": "cargo build -p dynamic-config-node --release && node -e \"const {copyFileSync, existsSync} = require('fs'); const built = ['../target/release/libdynamic_config_node.so', '../target/release/libdynamic_config_node.dylib', '../target/release/dynamic_config_node.dll'].find(existsSync); copyFileSync(built, 'index.node')\""
   },
   "devDependencies": {
-    "typescript": "^5.6.0"
+    "typescript": "^7.0.2"
   }
 }
