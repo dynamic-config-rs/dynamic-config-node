@@ -78,11 +78,11 @@ jobs:
             runner: windows-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v5
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v5
         with:
           node-version: "22"
       # Native runners per architecture rather than cross-compilation: the
@@ -147,7 +147,7 @@ jobs:
 
           (cd dynamic-config-node && node --test tests/*.test.js)
           (cd dynamic-config-node-remote && node --test tests/*.test.js)
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: addon-${{ matrix.target }}
           path: artefacts/**/*.node
@@ -174,14 +174,14 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v5
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v5
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
       # A recent npm: `--provenance` wants one, and trusted publishing
       # will want ≥ 11.5 the day the console entries land.
       - run: npm install -g npm@latest && npm --version
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: addon-*
           merge-multiple: true
@@ -357,7 +357,7 @@ jobs:
       # Deliberately *not* a gate: an SBOM that fails a build fails it for a
       # fact about somebody else's published package, and the advisory gate
       # in security.yml is where that belongs.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
         with:
           node-version: 22
       - name: the bill of materials, per ecosystem
@@ -375,7 +375,7 @@ jobs:
 
           ls -la sbom
 
-      - uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: v${{ needs.decide.outputs.version }}
           name: v${{ needs.decide.outputs.version }}
